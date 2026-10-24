@@ -91,7 +91,7 @@ Then it saves `{ refreshToken, uid, email }` and prints who is logged in. Fireba
 - If Firebase rotates the refresh token, `credentials.save()` it.
 - No background timers. No traffic while idle.
 
-> **Verify first (assumption, not a decision).** Nobody has yet run the `securetoken` refresh against Rouvy. The first build slice must confirm that a refreshed `idToken` is accepted by `resources/auth.data`. **Fallback if not:** store the 30-day `rouvy_session` instead of the refresh token, and have the user re-run `login` about monthly. Nothing else in this spec changes.
+> **Verified 2026-10-24** (build slice 1, [#15](https://github.com/scastiel/rouvymcp/issues/15)): a `securetoken`-refreshed `idToken` is accepted by `resources/auth.data`, which answers with a fresh `rouvy_session` cookie (`rouvy-mcp status` against a real account). The refresh-token design stands. The unused fallback was: store the 30-day `rouvy_session` instead of the refresh token, and have the user re-run `login` about monthly.
 
 ### Missing or expired credentials
 
@@ -350,5 +350,5 @@ Decoded `["routes/resources.activities-pagination"].data`:
 - `POST https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=<key>`: JSON `{email, password, returnSecureToken: true}` → `idToken` (1 h), `refreshToken`, `localId`.
 - `POST https://account.rouvy.com/resources/auth.data`: form `{idToken, uid, refreshToken, riders: "true", isNew: "false"}` → 202 redirect to `/redirect/riders-portal`, `Set-Cookie: rouvy_session` (`Domain=rouvy.com; HttpOnly; Secure; SameSite=Lax`, 30 days) and `rouvysession_tos` (1 day).
 - `rouvy_session` = base64 JSON `{idToken, refreshToken, uid}`; works on `riders.rouvy.com` on its own.
-- `POST https://securetoken.googleapis.com/v1/token?key=<key>`: `grant_type=refresh_token&refresh_token=…` → new `id_token` (standard Firebase; **unverified against Rouvy**, §4).
+- `POST https://securetoken.googleapis.com/v1/token?key=<key>`: `grant_type=refresh_token&refresh_token=…` → new `id_token` (standard Firebase; accepted by `auth.data`, verified §4).
 - `POST https://riders.rouvy.com/login.data` (prior art's route): behind a Cloudflare UA-pattern rule and an apparent login rate rule. Not used.
