@@ -1,0 +1,3 @@
+q1|How did my FTP ramp test go last week, and what FTP does it suggest? My current FTP setting is 195 W.
+q2|On my "Endurance Waves" ride, did my heart rate drift relative to my power over the ride (aerobic decoupling)? Give me a number.
+q3|How did I pace the Montreal Worlds Time Trial? Did I go out too hard or fade?

@@ -1,0 +1,14 @@
+{
+  "name": "rouvymcp-prototype-tool-surface",
+  "private": true,
+  "type": "module",
+  "description": "PROTOTYPE, throwaway: compares MCP tool-surface variants for the Rouvy MCP server",
+  "scripts": {
+    "proto": "node prototype-server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "fit-file-parser": "^6.2.3",
+    "zod": "^4.6.7"
+  }
+}

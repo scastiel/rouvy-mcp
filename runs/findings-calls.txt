@@ -1,0 +1,111 @@
+
+### q1-A  turns=8 cost=$0.078 input_tokens=20303 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->939ch
+  - get_activity({}) ->954ch
+  - get_activity({}) ->930ch
+  - get_activity_streams({"resolution_sec":30}) ->1420ch
+  - get_activity_streams({"resolution_sec":120}) ->952ch
+  - get_activity_streams({"resolution_sec":120}) ->686ch
+
+### q1-B  turns=9 cost=$0.077 input_tokens=30304 success
+  - list_activities({"limit":30}) ->1685ch
+  - get_activity({}) ->939ch
+  - get_activity({}) ->954ch
+  - get_activity({}) ->930ch
+  - get_activity_intervals({"split":"fixed","every_sec":120}) ->4206ch
+  - get_window_stats({"start_sec":0,"end_sec":2400}) ->344ch
+  - get_window_stats({"start_sec":2400,"end_sec":4800}) ->347ch
+  - get_activity_intervals({"split":"fixed","every_sec":600}) ->1521ch
+
+### q1-C  turns=7 cost=$0.068 input_tokens=44246 success
+  - list_activities({"limit":30}) ->1685ch
+  - get_activity({}) ->939ch
+  - export_activity_data({}) ->568ch
+  - export_activity_data({}) ->595ch
+  - export_activity_data({}) ->542ch
+  - Bash({"command":"cd /Users/sebastien/.claude-perso/jobs/e2efdbdf/tmp/proto/prototype-out/C && p) ->1022ch
+
+### q1-all  turns=9 cost=$0.074 input_tokens=39829 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->939ch
+  - get_activity({}) ->954ch
+  - get_activity({}) ->930ch
+  - get_activity_streams({"fields":["power","heart_rate"],"resolution_sec":60}) ->613ch
+  - get_window_stats({"start_sec":0,"end_sec":2400}) ->344ch
+  - get_window_stats({"start_sec":2400,"end_sec":4800}) ->347ch
+  - get_activity_intervals({"split":"fixed","every_sec":600}) ->1521ch
+
+### q2-A  turns=8 cost=$0.085 input_tokens=20084 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->939ch
+  - get_activity({}) ->954ch
+  - get_activity({}) ->930ch
+  - get_activity_streams({"fields":["power","heart_rate"],"resolution_sec":60}) ->613ch
+  - get_activity_streams({"fields":["power","heart_rate"],"resolution_sec":60}) ->1378ch
+  - get_activity_streams({"fields":["power","heart_rate"],"resolution_sec":120}) ->536ch
+
+### q2-B  turns=9 cost=$0.063 input_tokens=21354 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->954ch
+  - get_window_stats({"start_sec":0,"end_sec":2400}) ->344ch
+  - get_window_stats({"start_sec":2400,"end_sec":4800}) ->347ch
+  - get_activity({}) ->939ch
+  - get_activity_intervals({}) ->1937ch
+  - get_activity({}) ->930ch
+  - get_activity_intervals({"split":"fixed","every_sec":600}) ->1521ch
+
+### q2-C  turns=7 cost=$0.066 input_tokens=35248 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->939ch
+  - export_activity_data({}) ->568ch
+  - export_activity_data({}) ->595ch
+  - export_activity_data({}) ->542ch
+  - Bash({"command":"cd /Users/sebastien/.claude-perso/jobs/e2efdbdf/tmp/proto/prototype-out/C && p) ->1012ch
+
+### q2-all  turns=9 cost=$0.089 input_tokens=45416 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->954ch
+  - get_activity({}) ->939ch
+  - get_activity({}) ->930ch
+  - get_window_stats({"start_sec":0,"end_sec":2400}) ->344ch
+  - get_window_stats({"start_sec":2400,"end_sec":4800}) ->347ch
+  - get_activity_intervals({"split":"fixed","every_sec":600}) ->1521ch
+  - get_activity_intervals({"split":"fixed","every_sec":60}) ->8364ch
+
+### q3-A  turns=8 cost=$0.096 input_tokens=20233 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->939ch
+  - get_activity({}) ->954ch
+  - get_activity({}) ->930ch
+  - get_activity_streams({"resolution_sec":60,"fields":["power","heart_rate"]}) ->613ch
+  - get_activity_streams({"resolution_sec":60,"fields":["power","heart_rate"]}) ->1378ch
+  - get_activity_streams({"resolution_sec":120,"fields":["power","heart_rate","speed_kmh","altitude"]}) ->842ch
+
+### q3-B  turns=9 cost=$0.064 input_tokens=21215 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->939ch
+  - get_activity({}) ->954ch
+  - get_activity({}) ->930ch
+  - get_activity_intervals({"split":"fixed","every_sec":600}) ->1521ch
+  - get_activity_intervals({}) ->1937ch
+  - get_window_stats({"start_sec":0,"end_sec":2400}) ->344ch
+  - get_window_stats({"start_sec":2400,"end_sec":4800}) ->347ch
+
+### q3-C  turns=7 cost=$0.074 input_tokens=34894 success
+  - list_activities({"limit":50}) ->1685ch
+  - export_activity_data({}) ->595ch
+  - export_activity_data({}) ->568ch
+  - export_activity_data({}) ->542ch
+  - Bash({"command":"cd /tmp && python3 -I - <<'EOF'\nimport csv\nD=\"/Users/sebastien/.claude-pers) ->1072ch
+  - get_activity({}) ->939ch
+
+### q3-all  turns=9 cost=$0.097 input_tokens=49454 success
+  - list_activities({"limit":50}) ->1685ch
+  - get_activity({}) ->939ch
+  - get_activity({}) ->954ch
+  - get_activity({}) ->930ch
+  - get_activity_intervals({"split":"fixed","every_sec":570}) ->1522ch
+  - get_activity_intervals({"split":"fixed","every_sec":60}) ->8364ch
+  - get_window_stats({"start_sec":0,"end_sec":2400}) ->344ch
+  - get_window_stats({"start_sec":2400,"end_sec":4800}) ->347ch
