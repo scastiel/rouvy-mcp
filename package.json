@@ -1,0 +1,30 @@
+{
+  "name": "rouvy-mcp",
+  "version": "0.0.0",
+  "description": "Unofficial Rouvy MCP server",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "rouvy-mcp": "dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scastiel/rouvy-mcp.git"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}
