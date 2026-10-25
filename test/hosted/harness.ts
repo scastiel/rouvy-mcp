@@ -76,6 +76,8 @@ export function hostedWorker({ allowList, routes = {} }: { allowList?: string; r
   const { kv, entries } = fakeKV();
   const host = createRidersHost({ fetch: timedFetch, clock });
   const jurisdictions: string[] = [];
+  // How many `/mcp` requests the Worker has handed to the Durable Object so far.
+  let delivered = 0;
   const env = {
     OAUTH_KV: kv,
     PUBLIC_URL: ORIGIN,
@@ -85,7 +87,12 @@ export function hostedWorker({ allowList, routes = {} }: { allowList?: string; r
         jurisdictions.push(name);
         return {
           idFromName: (objectName: string) => objectName,
-          get: () => ({ serve: (request: Request, props: GrantProps) => host.serve(request, props) }),
+          get: () => ({
+            serve(request: Request, props: GrantProps) {
+              delivered++;
+              return host.serve(request, props);
+            },
+          }),
         };
       },
     },
@@ -97,7 +104,21 @@ export function hostedWorker({ allowList, routes = {} }: { allowList?: string; r
     return worker.fetch!(new Request(new URL(path, ORIGIN), init) as never, env as never, ctx as never);
   }
 
-  return { fetch, network: { ...network, routes: allRoutes }, kv: entries, jurisdictions, clockReadings };
+  /** Resolves once the Durable Object has received `count` requests in all. */
+  async function reachedDurableObject(count: number) {
+    while (delivered < count) await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+
+  return {
+    fetch,
+    network: { ...network, routes: allRoutes },
+    kv: entries,
+    jurisdictions,
+    clock,
+    clockReadings,
+    reachedDurableObject,
+    refreshTokenRotations: () => host.refreshTokenRotations(),
+  };
 }
 
 type Worker = ReturnType<typeof hostedWorker>;
@@ -157,33 +178,53 @@ export async function submitSignIn(worker: Worker, { page }: Pick<SignInPage, "p
   });
 }
 
-/** Trades the code the sign-in redirected with for an access token, as the client would. */
-export async function exchangeCode(worker: Worker, signIn: SignInPage, redirect: Response): Promise<string> {
+/** What the client holds after the code exchange. */
+export interface ClientTokens {
+  accessToken: string;
+  refreshToken: string;
+  clientId: string;
+}
+
+function tokenRequest(worker: Worker, clientId: string, fields: Record<string, string>) {
+  return worker.fetch("/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: clientId, resource: MCP_URL, ...fields }),
+  });
+}
+
+/** Trades the code the sign-in redirected with for tokens, as the client would. */
+export async function exchangeCode(worker: Worker, signIn: SignInPage, redirect: Response): Promise<ClientTokens> {
   const location = new URL(redirect.headers.get("location") ?? "");
   const code = location.searchParams.get("code");
   if (!code) throw new Error(`no code in ${location}`);
-  const response = await worker.fetch("/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: REDIRECT_URI,
-      client_id: signIn.clientId,
-      code_verifier: signIn.verifier,
-      resource: MCP_URL,
-    }),
+  const response = await tokenRequest(worker, signIn.clientId, {
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: REDIRECT_URI,
+    code_verifier: signIn.verifier,
   });
   if (response.status !== 200) throw new Error(`token exchange failed: ${response.status} ${await response.text()}`);
-  return ((await response.json()) as { access_token: string }).access_token;
+  const body = (await response.json()) as { access_token: string; refresh_token: string };
+  return { accessToken: body.access_token, refreshToken: body.refresh_token, clientId: signIn.clientId };
+}
+
+/** The client's refresh, as it does after `/mcp` answers 401. */
+export function refresh(worker: Worker, { refreshToken, clientId }: ClientTokens): Promise<Response> {
+  return tokenRequest(worker, clientId, { grant_type: "refresh_token", refresh_token: refreshToken });
 }
 
 /** The whole flow for an allow-listed rider: register, sign in, exchange the code. */
-export async function connectRider(worker: Worker, email: string): Promise<string> {
+export async function connect(worker: Worker, email: string): Promise<ClientTokens> {
   const signIn = await openSignIn(worker, await registerClient(worker));
   const redirect = await submitSignIn(worker, signIn, { email, password: "correct horse", ...CONSENTED });
   if (redirect.status !== 302) throw new Error(`sign-in failed: ${redirect.status} ${await redirect.text()}`);
   return exchangeCode(worker, signIn, redirect);
+}
+
+/** The access token of a freshly connected rider. */
+export async function connectRider(worker: Worker, email: string): Promise<string> {
+  return (await connect(worker, email)).accessToken;
 }
 
 /** One MCP request over Streamable HTTP; by default at the 2025 era claude.ai falls back to. */

@@ -1,15 +1,27 @@
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { describe, expect, it } from "vitest";
-import { firebaseError } from "../fakes.js";
-import { activityRow, LIST, listPage, REFRESH } from "../server-harness.js";
+import { firebaseError, json, rouvySessionOpened } from "../fakes.js";
+import {
+  activityRow,
+  AUTH_DATA,
+  detail,
+  fakeIdToken,
+  fixtureDetail,
+  LIST,
+  listPage,
+  REFRESH,
+  ROUTE_ACTIVITY,
+} from "../server-harness.js";
 import {
   CONSENTED,
+  connect,
   connectRider,
   hostedWorker,
   MCP_URL,
   mcpRequest,
   openSignIn,
   ORIGIN,
+  refresh,
   registerClient,
   SIGN_IN,
   signedIn,
@@ -299,18 +311,6 @@ describe("an allow-listed rider", () => {
     expect(stored).not.toContain("correct horse");
   });
 
-  it("is told to reconnect, not to run the stdio login command, when the Rouvy sign-in has ended", async () => {
-    const worker = workerWithRiders();
-    const token = await connectRider(worker, RIDER);
-    worker.network.routes[REFRESH] = () => firebaseError("TOKEN_EXPIRED");
-
-    const response = await mcpRequest(worker, token, "tools/call", { name: "list_activities", arguments: {} });
-    const body = JSON.stringify(await response.json());
-
-    expect(body).toContain("Reconnect rouvy-mcp in your MCP client");
-    expect(body).not.toContain("npx");
-  });
-
   it("can't use GET on the MCP endpoint", async () => {
     const worker = workerWithRiders();
     const token = await connectRider(worker, RIDER);
@@ -379,5 +379,158 @@ describe("the hosted MCP endpoint", () => {
     expect(response.headers.get("www-authenticate")).toContain(
       `resource_metadata="${ORIGIN}/.well-known/oauth-protected-resource/mcp"`,
     );
+  });
+});
+
+const RIDER = "rider@example.com";
+
+type HostedWorker = ReturnType<typeof hostedWorker>;
+
+/** One allow-listed rider, uid-1, with one Activity. */
+function workerWithRider(routes: NonNullable<Parameters<typeof hostedWorker>[0]>["routes"] = {}) {
+  return hostedWorker({
+    allowList: RIDER,
+    routes: { [SIGN_IN]: signedIn("uid-1", RIDER), [LIST]: () => listPage([activityRow("a00")]), ...routes },
+  });
+}
+
+const listActivities = (worker: HostedWorker, token: string) =>
+  mcpRequest(worker, token, "tools/call", { name: "list_activities", arguments: { limit: 1 } });
+
+/** The Session renewals sent since the `since`-th request. */
+const renewals = (worker: HostedWorker, since: number) =>
+  worker.network.requests.slice(since).filter((r) => r.url.host === "securetoken.googleapis.com");
+
+/** securetoken handing back idTokens that expire in 10 minutes, so a call 6 minutes later renews. */
+function shortLivedIdTokens(worker: HostedWorker, refreshToken: (presented: string) => Response | string) {
+  worker.network.routes[REFRESH] = (request) => {
+    const answer = refreshToken(new URLSearchParams(request.body).get("refresh_token") ?? "");
+    if (answer instanceof Response) return answer;
+    return json({ id_token: fakeIdToken("uid-1", worker.clock.now() + 10 * 60_000), refresh_token: answer, user_id: "uid-1" });
+  };
+}
+
+describe("a Grant", () => {
+  it.each(["INVALID_REFRESH_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND", "USER_DISABLED"])(
+    "ends when Firebase answers %s: /mcp answers 401 and the client's refresh gets invalid_grant",
+    async (answer) => {
+      const worker = workerWithRider();
+      const tokens = await connect(worker, RIDER);
+      worker.network.routes[REFRESH] = () => firebaseError(answer);
+
+      const response = await listActivities(worker, tokens.accessToken);
+
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toContain("resource_metadata=");
+      const refreshed = await refresh(worker, tokens);
+      expect(refreshed.status).toBe(400);
+      expect(await refreshed.json()).toMatchObject({ error: "invalid_grant" });
+      expect((await listActivities(worker, tokens.accessToken)).status).toBe(401);
+    },
+  );
+
+  it.each([
+    ["Firebase says TOO_MANY_ATTEMPTS_TRY_LATER", REFRESH, () => firebaseError("TOO_MANY_ATTEMPTS_TRY_LATER")],
+    ["Firebase answers a 5xx", REFRESH, () => new Response(null, { status: 503 })],
+    ["Rouvy refuses auth.data despite a fresh idToken", AUTH_DATA, () => new Response(null, { status: 202 })],
+  ])("lives on when %s: the rider gets a 'try again later' tool error", async (_, route, failure) => {
+    const worker = workerWithRider();
+    const tokens = await connect(worker, RIDER);
+    const working = worker.network.routes[route]!;
+    worker.network.routes[route] = failure;
+
+    const failed = await listActivities(worker, tokens.accessToken);
+
+    expect(failed.status).toBe(200);
+    const { result } = (await failed.json()) as { result: { isError: boolean; content: { text: string }[] } };
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toMatch(/Try (again )?later\.$/);
+    expect(result.content[0]!.text).not.toContain("npx");
+    worker.network.routes[route] = working;
+    const retried = await listActivities(worker, tokens.accessToken);
+    expect(JSON.stringify(await retried.json())).toContain("a00");
+    expect((await refresh(worker, tokens)).status).toBe(200);
+  });
+});
+
+describe("a rider's tool calls", () => {
+  it("run one after the other: the second waits for the first, so one Session serves both", async () => {
+    const worker = workerWithRider({
+      [detail(ROUTE_ACTIVITY)]: () => new Response(fixtureDetail("route"), { headers: { "content-type": "text/x-script" } }),
+    });
+    const token = await connectRider(worker, RIDER);
+    const signInRequests = worker.network.requests.length;
+    // Rouvy is slow to open the first call's Session: the second call arrives meanwhile.
+    let openSession!: () => void;
+    const slow = new Promise<void>((resolve) => (openSession = resolve));
+    worker.network.routes[AUTH_DATA] = async () => (await slow, rouvySessionOpened());
+
+    const responses = Promise.all([
+      listActivities(worker, token),
+      mcpRequest(worker, token, "tools/call", { name: "get_activity", arguments: { activity_id: ROUTE_ACTIVITY } }),
+    ]);
+    await worker.reachedDurableObject(2);
+    openSession();
+
+    expect((await responses).map((r) => r.status)).toEqual([200, 200]);
+    const sent = worker.network.requests.slice(signInRequests).map((r) => r.url.host + r.url.pathname);
+    expect(sent).toEqual([REFRESH, AUTH_DATA, LIST, detail(ROUTE_ACTIVITY)]);
+  });
+});
+
+describe("a rider's instance", () => {
+  async function renewalsAfterIdle(idleMs: number) {
+    const worker = workerWithRider();
+    const token = await connectRider(worker, RIDER);
+    const signInRequests = worker.network.requests.length;
+
+    await listActivities(worker, token);
+    worker.clock.advance(idleMs);
+    const response = await listActivities(worker, token);
+
+    expect(JSON.stringify(await response.json())).toContain("a00");
+    return renewals(worker, signInRequests).length;
+  }
+
+  it("is kept while the rider is active: their live Session serves the next call", async () => {
+    expect(await renewalsAfterIdle(29 * 60_000)).toBe(1);
+  });
+
+  it("is gone after 30 minutes idle: the next call opens a new Session", async () => {
+    expect(await renewalsAfterIdle(30 * 60_000)).toBe(2);
+  });
+
+  it("keeps a refresh token Firebase rotated, and counts the rotation", async () => {
+    const worker = workerWithRider();
+    const token = await connectRider(worker, RIDER);
+    let issued = 0;
+    shortLivedIdTokens(worker, () => `rotated-${++issued}`);
+    const signInRequests = worker.network.requests.length;
+
+    await listActivities(worker, token);
+    worker.clock.advance(6 * 60_000);
+    await listActivities(worker, token);
+
+    expect(new URLSearchParams(renewals(worker, signInRequests)[1]!.body).get("refresh_token")).toBe("rotated-1");
+    expect(worker.refreshTokenRotations()).toBe(2);
+  });
+
+  it("keeps each Grant's rotated refresh token when the rider alternates between two clients", async () => {
+    const worker = workerWithRider();
+    const tokens = [await connectRider(worker, RIDER), await connectRider(worker, RIDER)];
+    // Firebase rotates each refresh token once, and the old one stops working.
+    const dead = new Set<string>();
+    shortLivedIdTokens(worker, (presented) => {
+      if (dead.has(presented)) return firebaseError("INVALID_REFRESH_TOKEN");
+      if (presented.endsWith("-rotated")) return presented;
+      dead.add(presented);
+      return `${presented}-rotated`;
+    });
+
+    for (const token of [tokens[0]!, tokens[1]!, tokens[0]!]) {
+      const response = await listActivities(worker, token);
+      expect(response.status).toBe(200);
+      worker.clock.advance(6 * 60_000);
+    }
   });
 });
