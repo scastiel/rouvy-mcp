@@ -19,9 +19,11 @@ export interface AuthorizeOptions {
 }
 
 const INVITE_ONLY: Problem = { message: "This instance is invite-only.", inviteOnly: true };
+const NO_CONSENT: Problem = { message: "Tick both boxes to connect." };
 
 /**
- * The sign-in page (spec-m2 §5): Rouvy email and password, checked against the allow-list before
+ * The sign-in page (spec-m2 §5), shown on every sign-in: Cancel returns `access_denied`; Connect
+ * needs both consent boxes, then the Rouvy email and password, checked against the allow-list before
  * Firebase ever sees them, then M1's sign-in and one Rouvy check. The password is used once and
  * dropped; the Grant keeps only the refresh token, encrypted by the provider.
  */
@@ -32,8 +34,13 @@ export async function authorize(request: Request, { oauth, allowList, fetch }: A
     if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "GET, POST" } });
 
     const form = await request.formData();
+    const handle = String(form.get("handle") ?? "");
+    if (form.get("action") === "cancel") {
+      const denied = await oauth.denyConsent(request, handle);
+      return new Response(null, { status: 302, headers: denied.headers });
+    }
     // Checks this browser opened the page, and works once: a stranger can't post here directly.
-    const approved = await oauth.approveConsent(request, String(form.get("handle") ?? ""));
+    const approved = await oauth.approveConsent(request, handle);
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
     const retry = async (problem: Problem) => {
@@ -44,6 +51,8 @@ export async function authorize(request: Request, { oauth, allowList, fetch }: A
 
     // Before any Firebase call, so this page can't test passwords against Firebase from our egress.
     if (!allowed.has(email.toLowerCase())) return await retry(INVITE_ONLY);
+    // Checked here, not only by the form: both boxes are required (spec-m2 §5).
+    if (!form.has("accept_risk") || !form.has("consent_health")) return await retry(NO_CONSENT);
 
     let props: GrantProps;
     try {
