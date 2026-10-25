@@ -7,6 +7,7 @@ import {
 import { AuthError } from "../auth/errors.js";
 import { signInWithPassword } from "../auth/firebase.js";
 import { openRouvySession } from "../auth/rouvy-session.js";
+import type { Log } from "./log.js";
 import { errorPage, signInPage, type Problem } from "./pages.js";
 import type { GrantProps } from "./riders.js";
 
@@ -16,6 +17,7 @@ export interface AuthorizeOptions {
   allowList: string | undefined;
   /** Already carries the honest user agent. */
   fetch: typeof globalThis.fetch;
+  log: Log;
 }
 
 const INVITE_ONLY: Problem = { message: "This instance is invite-only.", inviteOnly: true };
@@ -27,7 +29,7 @@ const NO_CONSENT: Problem = { message: "Tick both boxes to connect." };
  * Firebase ever sees them, then M1's sign-in and one Rouvy check. The password is used once and
  * dropped; the Grant keeps only the refresh token, encrypted by the provider.
  */
-export async function authorize(request: Request, { oauth, allowList, fetch }: AuthorizeOptions): Promise<Response> {
+export async function authorize(request: Request, { oauth, allowList, fetch, log }: AuthorizeOptions): Promise<Response> {
   const allowed = parseAllowList(allowList);
   try {
     if (request.method === "GET") return await showSignIn(oauth, await oauth.parseAuthRequest(request));
@@ -72,6 +74,7 @@ export async function authorize(request: Request, { oauth, allowList, fetch }: A
       scope: [],
       props,
     });
+    log({ event: "grant_created" });
     approved.headers.set("location", redirectTo);
     return new Response(null, { status: 302, headers: approved.headers });
   } catch (error) {

@@ -4,9 +4,13 @@ import {
   WebStandardStreamableHTTPServerTransport,
   type McpServer,
 } from "@modelcontextprotocol/server";
+import { runCanary, type CanaryCheck } from "../canary.js";
 import type { Credentials } from "../credentials/types.js";
 import { systemClock, type Clock } from "../rouvy/clock.js";
 import { createPoliteFetch, createRider, createServer, type Rider } from "../server.js";
+import { createBlockSignals, type Store } from "./block-signals.js";
+import type { BlockSignal, Log } from "./log.js";
+import { observeUpstream } from "./upstream.js";
 
 /** How long a rider's instance outlives their last call. */
 const IDLE_MS = 30 * 60_000;
@@ -38,7 +42,27 @@ export interface RidersHost {
   serve(request: Request, props: GrantProps): Promise<Served>;
   /** How many times Firebase has handed back a new refresh token, so we notice (spec-m2 §6). Never the tokens. */
   refreshTokenRotations(): number;
+  /** Counts a hard block signal the Worker saw, on the sign-in page (spec-m2 §9). */
+  recordBlockSignal(kind: BlockSignal): Promise<void>;
+  /** What `GET /health` reports (spec-m2 §9). */
+  health(): Promise<Health>;
 }
+
+/** No personal data: the account-free checks, and how many block signals the last 24 h saw. */
+export interface Health {
+  /** False when a check fails, or when hard block signals have persisted for over an hour: a block. */
+  ok: boolean;
+  checkedAt: string;
+  checks: CanaryCheck[];
+  blockSignals: Record<BlockSignal, number> & {
+    /** The first and last of the last 24 h are over an hour apart. */
+    persisting: boolean;
+  };
+}
+
+/** Rouvy sees the `/health` checks at most this often (spec-m2 §9). */
+const HEALTH_TTL_MS = 60 * 60_000;
+const HEALTH_KEY = "health";
 
 /** Nothing on the hosted server mentions the stdio login command: the rider reconnects in their client. */
 function notLoggedInMessage(terminal: boolean): string {
@@ -52,11 +76,28 @@ function notLoggedInMessage(terminal: boolean): string {
  * the request budget and cool-down are global, and one Rider (live Session, caches) per uid, all
  * in memory. Each request gets its own MCP server around its rider's Rider.
  */
-export function createRidersHost({ fetch, clock = systemClock }: { fetch: typeof globalThis.fetch; clock?: Clock }): RidersHost {
-  const politeFetch = createPoliteFetch(fetch, clock);
+export function createRidersHost({
+  fetch,
+  clock = systemClock,
+  log,
+  store,
+}: {
+  fetch: typeof globalThis.fetch;
+  clock?: Clock;
+  log: Log;
+  /** The Durable Object's storage: only block signals and the `/health` cache go there. */
+  store: Store;
+}): RidersHost {
+  const blockSignals = createBlockSignals(store, clock);
+  const recordBlockSignal = (kind: BlockSignal) => blockSignals.record(kind).catch(() => {});
+  const observedFetch = observeUpstream(fetch, { log, onBlockSignal: (kind) => void recordBlockSignal(kind) });
+  const politeFetch = createPoliteFetch(observedFetch, clock, {
+    onCoolDown: ({ reason, ms }) => log({ event: "cool_down", reason, seconds: Math.ceil(ms / 1000) }),
+  });
   const riders = new Map<string, Instance>();
   const inTurn = createTurns();
   let rotations = 0;
+  log({ event: "durable_object_started" });
 
   /**
    * Drops the instances idle for 30 minutes (spec-m2 §7.3), never one with a call in flight. Swept
@@ -88,6 +129,7 @@ export function createRidersHost({ fetch, clock = systemClock }: { fetch: typeof
             credentials = rotated;
             latestTokens.set(grantToken, rotated.refreshToken);
             rotations++;
+            log({ event: "refresh_token_rotated", rotations });
           },
         },
         politeFetch,
@@ -110,14 +152,50 @@ export function createRidersHost({ fetch, clock = systemClock }: { fetch: typeof
     return instance;
   }
 
+  let checking: Promise<{ at: number; checks: CanaryCheck[] }> | undefined;
+
+  /** M1's canary, from this egress, cached in storage so an eviction doesn't send it again. */
+  async function canaryChecks() {
+    const cached = await store.get<{ at: number; checks: CanaryCheck[] }>(HEALTH_KEY);
+    if (cached && clock.now() - cached.at < HEALTH_TTL_MS) return cached;
+    checking ??= (async () => {
+      try {
+        const fresh = { at: clock.now(), checks: await runCanary(observedFetch) };
+        await store.put(HEALTH_KEY, fresh);
+        log({ event: "health_checked", failing: fresh.checks.filter((check) => !check.ok).length });
+        return fresh;
+      } finally {
+        checking = undefined;
+      }
+    })();
+    return checking;
+  }
+
   return {
+    async health() {
+      const { at, checks } = await canaryChecks();
+      const signals = await blockSignals.lastDay();
+      const persisting = signals.length > 0 && signals[signals.length - 1]!.at - signals[0]!.at > HEALTH_TTL_MS;
+      const count = (kind: BlockSignal) => signals.filter((signal) => signal.kind === kind).length;
+      return {
+        ok: checks.every((check) => check.ok) && !persisting,
+        checkedAt: new Date(at).toISOString(),
+        checks,
+        blockSignals: { cloudflare: count("cloudflare"), auth_data_refused: count("auth_data_refused"), persisting },
+      };
+    },
     serve(request, props) {
       dropIdle();
       return inTurn(props.uid, async () => {
         const instance = instanceFor(props);
         let grantEnded = false;
         const server = () =>
-          createServer({ rider: instance.rider, notLoggedInMessage, onTerminalAuthFailure: () => (grantEnded = true) });
+          createServer({
+            rider: instance.rider,
+            notLoggedInMessage,
+            onTerminalAuthFailure: () => (grantEnded = true),
+            onToolCall: ({ tool, outcome, durationMs }) => log({ event: "tool_call", tool, outcome, duration_ms: durationMs }),
+          });
         instance.busy = true;
         let response: Response;
         try {
@@ -133,6 +211,7 @@ export function createRidersHost({ fetch, clock = systemClock }: { fetch: typeof
       });
     },
     refreshTokenRotations: () => rotations,
+    recordBlockSignal,
   };
 }
 

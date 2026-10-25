@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { BlockSignal, LogEvent } from "../../src/hosted/log.js";
 import { createRidersHost, type GrantProps } from "../../src/hosted/riders.js";
 import { createWorker } from "../../src/hosted/worker.js";
 import type { Clock } from "../../src/rouvy/clock.js";
@@ -8,6 +9,8 @@ import { AUTH_DATA, fakeClock, REFRESH, refreshes, rouvySessionOpened } from "..
 export const ORIGIN = "https://mcp.example.com";
 export const MCP_URL = `${ORIGIN}/mcp`;
 export const SIGN_IN = "identitytoolkit.googleapis.com/v1/accounts:signInWithPassword";
+/** The address Cloudflare stamps on every request a client sends: it must never be logged. */
+export const CLIENT_IP = "203.0.113.7";
 const REDIRECT_URI = "https://client.example.com/callback";
 
 type Routes = Parameters<typeof fakeNetwork>[0];
@@ -74,7 +77,16 @@ export function hostedWorker({ allowList, routes = {} }: { allowList?: string; r
     return network.fetch(input, init);
   };
   const { kv, entries } = fakeKV();
-  const host = createRidersHost({ fetch: timedFetch, clock });
+  // Every line the Worker and the Durable Object logged, as Workers Logs would keep it.
+  const logs: string[] = [];
+  const log = (event: LogEvent) => logs.push(JSON.stringify(event));
+  // The Durable Object's own storage, in memory.
+  const storage = new Map<string, unknown>();
+  const store = {
+    get: async <T>(key: string) => storage.get(key) as T | undefined,
+    put: async (key: string, value: unknown) => void storage.set(key, value),
+  };
+  const host = createRidersHost({ fetch: timedFetch, clock, log, store });
   const jurisdictions: string[] = [];
   // How many `/mcp` requests the Worker has handed to the Durable Object so far.
   let delivered = 0;
@@ -92,16 +104,24 @@ export function hostedWorker({ allowList, routes = {} }: { allowList?: string; r
               delivered++;
               return host.serve(request, props);
             },
+            health: () => host.health(),
+            recordBlockSignal: (kind: BlockSignal) => host.recordBlockSignal(kind),
           }),
         };
       },
     },
   };
-  const worker = createWorker({ fetch: timedFetch });
-  const ctx = { waitUntil() {}, passThroughOnException() {}, props: {} };
+  const worker = createWorker({ fetch: timedFetch, log });
+  // Work the Worker hands to `waitUntil`, settled before a test reads what it did.
+  const pending: Promise<unknown>[] = [];
+  const ctx = { waitUntil: (promise: Promise<unknown>) => void pending.push(promise), passThroughOnException() {}, props: {} };
 
   async function fetch(path: string, init?: RequestInit): Promise<Response> {
-    return worker.fetch!(new Request(new URL(path, ORIGIN), init) as never, env as never, ctx as never);
+    const request = new Request(new URL(path, ORIGIN), init);
+    request.headers.set("cf-connecting-ip", CLIENT_IP);
+    const response = await worker.fetch!(request as never, env as never, ctx as never);
+    await Promise.all(pending.splice(0));
+    return response;
   }
 
   /** Resolves once the Durable Object has received `count` requests in all. */
@@ -118,6 +138,9 @@ export function hostedWorker({ allowList, routes = {} }: { allowList?: string; r
     clockReadings,
     reachedDurableObject,
     refreshTokenRotations: () => host.refreshTokenRotations(),
+    logs,
+    /** The events logged so far, parsed. */
+    events: () => logs.map((line) => JSON.parse(line) as LogEvent),
   };
 }
 

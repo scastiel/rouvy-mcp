@@ -1,4 +1,6 @@
+import { BOGUS_ACTIVITY_ID } from "../src/canary.js";
 import type { Terminal } from "../src/cli/terminal.js";
+import { ROUVY_FIREBASE_WEB_KEY } from "../src/constants.js";
 
 export interface RecordedRequest {
   url: URL;
@@ -49,6 +51,32 @@ export function rouvySessionOpened(): Response {
       ["set-cookie", "rouvysession_tos=1; Domain=rouvy.com; Path=/"],
     ],
   });
+}
+
+/** Rouvy's anonymous answer to any `.data` read, as captured on 2026-10-25. */
+function signInRedirect(path: string): Response {
+  const redirect = `https://account.rouvy.com/sign-in?riders=true&redirectTo=${encodeURIComponent(path)}`;
+  return new Response(
+    `[["SingleFetchRedirect",1],{"_2":3,"_4":5,"_6":7,"_8":7,"_9":7},"redirect","${redirect}","status",302,"revalidate",false,"reload","replace"]`,
+    { status: 202, headers: { "content-type": "text/x-script" } },
+  );
+}
+
+export function signInPage(key = ROUVY_FIREBASE_WEB_KEY): Response {
+  return new Response(`<!DOCTYPE html><html><script>window.ENV={"FIREBASE_API_KEY":"${key}"}</script></html>`, {
+    status: 200,
+    headers: { "content-type": "text/html" },
+  });
+}
+
+/** What the canary's checks meet today: Rouvy's and Firebase's answers to its account-free requests. */
+export function canaryRoutes(): Record<string, Handler> {
+  return {
+    "riders.rouvy.com/resources/activities-pagination.data": () => signInRedirect("/resources/activities-pagination"),
+    [`riders.rouvy.com/activity/${BOGUS_ACTIVITY_ID}.data`]: () => signInRedirect(`/activity/${BOGUS_ACTIVITY_ID}`),
+    "identitytoolkit.googleapis.com/v1/accounts:signInWithPassword": () => firebaseError("INVALID_LOGIN_CREDENTIALS"),
+    "account.rouvy.com/sign-in": () => signInPage(),
+  };
 }
 
 export function fakeTerminal(answers: { email?: string; password?: string } = {}) {

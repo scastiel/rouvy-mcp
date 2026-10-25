@@ -6,7 +6,7 @@ import { withUserAgent } from "./http.js";
 import { createRouvyClient, type RouvyClient } from "./rouvy/client.js";
 import { systemClock, type Clock } from "./rouvy/clock.js";
 import { isNotLoggedIn, isTerminalAuthFailure, RouvyError } from "./rouvy/errors.js";
-import { createPushback } from "./rouvy/pushback.js";
+import { createPushback, type CoolDown } from "./rouvy/pushback.js";
 import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
 import { STREAM_FIELDS } from "./stats/streams.js";
@@ -59,11 +59,26 @@ export type ServerOptions = (RiderOptions | { rider: Rider }) & {
    * The hosted server tells the rider to reconnect (spec-m2 §7.6).
    */
   notLoggedInMessage?: (terminal: boolean) => string;
+  /** Called as each tool call ends, with what an operator may see of it (spec-m2 §9). */
+  onToolCall?: (call: ToolCall) => void;
 };
 
+/** How a tool call ended: a category, never the message the rider saw. */
+export type ToolOutcome = "ok" | "invalid_input" | "signed_out" | "no_session" | "rouvy_error" | "unexpected";
+
+export interface ToolCall {
+  tool: string;
+  outcome: ToolOutcome;
+  durationMs: number;
+}
+
 /** One request at a time, backing off when Rouvy pushes back, with the honest user agent (spec §7). */
-export function createPoliteFetch(fetch: typeof globalThis.fetch, clock: Clock = systemClock): typeof globalThis.fetch {
-  return withUserAgent(createRequestQueue(createPushback(fetch, clock), clock));
+export function createPoliteFetch(
+  fetch: typeof globalThis.fetch,
+  clock: Clock = systemClock,
+  { onCoolDown }: { onCoolDown?: (coolDown: CoolDown) => void } = {},
+): typeof globalThis.fetch {
+  return withUserAgent(createRequestQueue(createPushback(fetch, clock, onCoolDown), clock));
 }
 
 export function createRider({
@@ -77,10 +92,11 @@ export function createRider({
 
 /** The transport-agnostic core: knows nothing about stdio, files or passwords. */
 export function createServer(options: ServerOptions): McpServer {
-  const { storage, onTerminalAuthFailure, notLoggedInMessage } = options;
+  const { storage, onTerminalAuthFailure, notLoggedInMessage, onToolCall } = options;
   const { rouvy } = "rider" in options ? options.rider : createRider(options);
   const server = new McpServer({ name: "rouvy-mcp", version: VERSION });
-  const toolResult = (run: () => Promise<unknown>) => runTool(run, onTerminalAuthFailure, notLoggedInMessage);
+  const toolResult = (tool: string, run: () => Promise<unknown>) =>
+    runTool(run, onTerminalAuthFailure, notLoggedInMessage, (outcome, durationMs) => onToolCall?.({ tool, outcome, durationMs }));
 
   server.registerTool(
     "list_activities",
@@ -93,7 +109,7 @@ export function createServer(options: ServerOptions): McpServer {
         offset: z.number().int().min(0).default(0).describe("How many of the newest Activities to skip."),
       }),
     },
-    (input) => toolResult(() => listActivities(rouvy, input)),
+    (input) => toolResult("list_activities", () => listActivities(rouvy, input)),
   );
 
   server.registerTool(
@@ -108,7 +124,7 @@ export function createServer(options: ServerOptions): McpServer {
         activity_id: activityId,
       }),
     },
-    (input) => toolResult(() => getActivity(rouvy, input)),
+    (input) => toolResult("get_activity", () => getActivity(rouvy, input)),
   );
 
   server.registerTool(
@@ -124,7 +140,7 @@ export function createServer(options: ServerOptions): McpServer {
         every_sec: z.number().int().min(10).default(300).describe("Split length in seconds (at least 10)."),
       }),
     },
-    (input) => toolResult(() => getActivityIntervals(rouvy, input)),
+    (input) => toolResult("get_activity_intervals", () => getActivityIntervals(rouvy, input)),
   );
 
   server.registerTool(
@@ -141,7 +157,7 @@ export function createServer(options: ServerOptions): McpServer {
         end_sec: z.number().int().min(1).describe("Window end, in seconds from the start (after start_sec)."),
       }),
     },
-    (input) => toolResult(() => getWindowStats(rouvy, input)),
+    (input) => toolResult("get_window_stats", () => getWindowStats(rouvy, input)),
   );
 
   server.registerTool(
@@ -171,7 +187,7 @@ export function createServer(options: ServerOptions): McpServer {
           .describe("End, in seconds from the start (after start_sec; default the end of the Activity)."),
       }),
     },
-    (input) => toolResult(() => getActivityStreams(rouvy, input)),
+    (input) => toolResult("get_activity_streams", () => getActivityStreams(rouvy, input)),
   );
 
   if (storage) {
@@ -187,7 +203,7 @@ export function createServer(options: ServerOptions): McpServer {
           format: z.enum(EXPORT_FORMATS).default("csv").describe("fit: the Activity file; csv: per-second records."),
         }),
       },
-      (input) => toolResult(() => exportActivityFile(rouvy, storage, input)),
+      (input) => toolResult("export_activity_file", () => exportActivityFile(rouvy, storage, input)),
     );
   }
 
@@ -196,12 +212,17 @@ export function createServer(options: ServerOptions): McpServer {
 
 async function runTool(
   run: () => Promise<unknown>,
-  onTerminalAuthFailure?: () => void,
-  notLoggedInMessage?: (terminal: boolean) => string,
+  onTerminalAuthFailure: (() => void) | undefined,
+  notLoggedInMessage: ((terminal: boolean) => string) | undefined,
+  ended: (outcome: ToolOutcome, durationMs: number) => void,
 ): Promise<CallToolResult> {
+  const start = Date.now();
   try {
-    return { content: [{ type: "text", text: JSON.stringify(await run(), null, 2) }] };
+    const result = JSON.stringify(await run(), null, 2);
+    ended("ok", Date.now() - start);
+    return { content: [{ type: "text", text: result }] };
   } catch (error) {
+    ended(outcomeOf(error), Date.now() - start);
     if (isTerminalAuthFailure(error)) onTerminalAuthFailure?.();
     // Only our own messages reach the client: anything else could carry a token or a response body.
     const message =
@@ -212,4 +233,10 @@ async function runTool(
         : "Something went wrong talking to Rouvy. Try later.";
     return { isError: true, content: [{ type: "text", text: message }] };
   }
+}
+
+function outcomeOf(error: unknown): ToolOutcome {
+  if (isNotLoggedIn(error)) return isTerminalAuthFailure(error) ? "signed_out" : "no_session";
+  if (error instanceof InputError) return "invalid_input";
+  return error instanceof RouvyError ? "rouvy_error" : "unexpected";
 }
