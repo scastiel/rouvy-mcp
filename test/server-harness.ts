@@ -6,6 +6,7 @@ import { decode, encode } from "turbo-stream";
 import type { Clock } from "../src/rouvy/clock.js";
 import type { Credentials, CredentialsProvider } from "../src/credentials/types.js";
 import { createServer } from "../src/server.js";
+import type { ExportStorage } from "../src/storage/types.js";
 import { fakeNetwork, json, rouvySessionOpened } from "./fakes.js";
 
 export const LIST_ROUTE = "routes/resources.activities-pagination";
@@ -152,7 +153,8 @@ type Detail = { activity: Record<string, any>; exportLink: string | null };
 export async function routeActivityServer({
   change = () => {},
   file = () => new Response(fixtureActivityFile(), { headers: { "content-type": "application/octet-stream" } }),
-}: { change?: (detail: Detail) => void; file?: () => Response } = {}) {
+  storage,
+}: { change?: (detail: Detail) => void; file?: () => Response; storage?: ExportStorage } = {}) {
   const { value, done } = await decode(new Blob([fixtureDetail("route")]).stream());
   await done;
   const payload = structuredClone(value) as Record<string, { data: Detail }>;
@@ -165,7 +167,7 @@ export async function routeActivityServer({
     [detail(ROUTE_ACTIVITY)]: () => turboStream(payload),
     [activityFile(ROUTE_ACTIVITY)]: file,
   });
-  const client = await connect({ credentials: credentials.provider, fetch: network.fetch, clock });
+  const client = await connect({ credentials: credentials.provider, fetch: network.fetch, clock, storage });
   return { client, network, clock };
 }
 

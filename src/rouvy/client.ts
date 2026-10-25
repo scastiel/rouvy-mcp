@@ -24,7 +24,12 @@ export const LIST_PAGE_SIZE = 10;
 export interface RouvyClient {
   listActivitiesPage(offset: number): Promise<ActivityListRow[]>;
   getActivity(activityId: string): Promise<ActivityDetail>;
-  getActivityFile(activityId: string): Promise<ActivityFile>;
+  getActivityFile(activityId: string): Promise<DownloadedActivityFile>;
+}
+
+/** A parsed Activity file, with its bytes as downloaded so an export never costs a second request. */
+export interface DownloadedActivityFile extends ActivityFile {
+  bytes: Uint8Array;
 }
 
 export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: SessionManager, clock: Clock): RouvyClient {
@@ -102,7 +107,8 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
       const response = await fetch(exportLink);
       if (response.status === 403 || response.status === 404) throw noActivityFile();
       if (response.status !== 200) throw rouvyUnavailable(response.status);
-      const file = await parseActivityFile(await response.arrayBuffer());
+      const bytes = await response.arrayBuffer();
+      const file = { ...(await parseActivityFile(bytes)), bytes: new Uint8Array(bytes) };
       activityFileCache.set(uid, activityId, file);
       return file;
     },
