@@ -1,7 +1,7 @@
-import { ROUVY_FIREBASE_WEB_KEY } from "../../src/constants.js";
-import { withUserAgent } from "../../src/http.js";
-import { LIST_ROUTE } from "../../src/rouvy/schemas.js";
-import { asRedirect, decodeSingleFetch } from "../../src/rouvy/turbo-stream.js";
+import { ROUVY_FIREBASE_WEB_KEY } from "./constants.js";
+import { withUserAgent } from "./http.js";
+import { LIST_ROUTE } from "./rouvy/schemas.js";
+import { asRedirect, decodeSingleFetch } from "./rouvy/turbo-stream.js";
 
 export interface CanaryCheck {
   name: string;

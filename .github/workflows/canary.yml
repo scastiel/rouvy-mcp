@@ -1,6 +1,7 @@
 name: Rouvy drift canary
 
-# Account-free: anonymous GETs to Rouvy and one made-up sign-in at Firebase, ~4 requests a day.
+# Account-free: anonymous GETs to Rouvy and one made-up sign-in at Firebase, ~4 requests a day,
+# from GitHub's egress and again from the Public instance's (its /health, cached for an hour).
 # No Rouvy credentials here, ever: `npm run contract:live` is for the maintainer's machine.
 on:
   schedule:
@@ -23,20 +24,53 @@ jobs:
       - run: npm ci
       - id: canary
         run: npm run canary
+        continue-on-error: true
         env:
           CANARY_REPORT: ${{ runner.temp }}/canary-report.md
+      - id: health
+        # The Public instance: wrangler.toml's PUBLIC_URL. Forks have none to check.
+        if: github.repository == 'scastiel/rouvy-mcp'
+        run: node scripts/check-health.mjs
+        continue-on-error: true
+        env:
+          HEALTH_URL: https://rides-mcp.scastiel.workers.dev/health
+          HEALTH_REPORT: ${{ runner.temp }}/health-report.md
       - name: Open or update the drift issue
-        if: failure() && steps.canary.outcome == 'failure'
+        if: steps.canary.outcome == 'failure' || steps.health.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
-          REPORT: ${{ runner.temp }}/canary-report.md
+          GITHUB_SIDE: ${{ steps.canary.outcome }}
+          WORKER_SIDE: ${{ steps.health.outcome }}
+          BLOCK_PERSISTING: ${{ steps.health.outputs.persisting }}
+          CANARY_REPORT: ${{ runner.temp }}/canary-report.md
+          HEALTH_REPORT: ${{ runner.temp }}/health-report.md
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           title="Rouvy drift canary failed"
+          runbooks="${{ github.server_url }}/${{ github.repository }}/blob/main/docs/runbooks"
+          # The block-or-drift rule (docs/runbooks/hard-stop.md).
+          if [ "$BLOCK_PERSISTING" = true ]; then
+            verdict="**Hard block signals have persisted for over an hour: treat it as a block and [Hard stop]($runbooks/hard-stop.md).**"
+          elif [ "$GITHUB_SIDE" = success ] && [ "$WORKER_SIDE" = failure ]; then
+            verdict="**Only the Worker side fails: treat it as a block and [Hard stop]($runbooks/hard-stop.md).**"
+          elif [ "$WORKER_SIDE" = failure ]; then
+            verdict="Both sides fail: Rouvy probably changed something rouvy-mcp relies on (drift). Fix it as in M1; the Public instance stays up meanwhile."
+          else
+            verdict="The GitHub side fails: Rouvy may have changed something rouvy-mcp relies on (drift)."
+          fi
+          report() { if [ -s "$1" ]; then cat "$1"; else echo "No report was written: see the run log."; fi; }
           {
-            echo "The daily canary failed on $(date -u +%F): Rouvy may have changed something rouvy-mcp relies on."
+            echo "The daily canary failed on $(date -u +%F). $verdict"
             echo
-            if [ -s "$REPORT" ]; then cat "$REPORT"; else echo "No report was written: see the run log."; fi
+            echo "**From GitHub** ($GITHUB_SIDE):"
+            echo
+            report "$CANARY_REPORT"
+            if [ -n "$WORKER_SIDE" ] && [ "$WORKER_SIDE" != skipped ]; then
+              echo
+              echo "**From the Public instance's /health** ($WORKER_SIDE):"
+              echo
+              report "$HEALTH_REPORT"
+            fi
             echo
             echo "Run: $RUN_URL"
           } > body.md
@@ -48,3 +82,6 @@ jobs:
           else
             gh issue create --title "$title" --label drift-canary --body-file body.md
           fi
+      - name: Fail the run
+        if: steps.canary.outcome == 'failure' || steps.health.outcome == 'failure'
+        run: exit 1

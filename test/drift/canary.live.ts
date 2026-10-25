@@ -1,6 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { expect, it } from "vitest";
-import { runCanary } from "./canary.js";
+import { runCanary } from "../../src/canary.js";
 
 /**
  * The daily account-free canary, against the real Rouvy. `CANARY_REPORT` names a file to write

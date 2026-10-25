@@ -14,6 +14,16 @@ PUBLIC_URL = "https://rides-mcp.scastiel.workers.dev"
 # The allow-list is a secret, not a var: `npx wrangler secret put ALLOW_LIST`
 # (Rouvy emails, separated by commas or whitespace).
 
+# Workers Logs, kept 7 days, for our own structured events only (docs/spec-m2.md §9). Invocation
+# logs are off: they'd record every request's URL, headers and the rider's IP address. No traces,
+# no Logpush, no other destination.
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+invocation_logs = false
+
 [[kv_namespaces]]
 binding = "OAUTH_KV"
 # `npx wrangler kv namespace create OAUTH_KV`, then paste its id here.
