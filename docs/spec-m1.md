@@ -137,6 +137,7 @@ Shared conventions:
 - **Input:** `activity_id`, `every_sec` (int ≥ 10, default 300).
 - **Output:** **fixed-size** splits; for each: start/end sec, avg / NP / max power, %FTP, avg/max HR, avg cadence, avg speed, distance, climbing.
 - **Source:** the Activity file.
+- **Built ([#18](https://github.com/scastiel/rouvymcp/issues/18)):** splits run from second 0 to the end of the records; the last one is shorter when the ride doesn't divide evenly. Which channels exist uses `get_activity`'s rule (Rouvy's `aggrs` max above 0), so `available_fields` and the splits agree. NP needs 30 s of data, so it's left out of shorter splits, with a note. Distance and climbing are measured from the last record before the split, so splits add up to the whole ride. A repeat call reuses the parsed Activity file (no download), but may fetch the detail again once its 10 min are up (the snapshot FTP comes from there).
 
 ### 5.4 `get_window_stats`
 
@@ -162,7 +163,7 @@ Shared conventions:
 
 - **Rider settings come from the Activity snapshot** (`activity.user.{FTP, weightKg, maxHr, zones{hr[7], pwr[7]}}` in the detail payload): the settings Rouvy stored with that ride. This matches Rouvy's own IF/TSS. No user override, and the current settings (`userData`) are **never** used.
 - **Missing values drop stats, with a note.** No HR → no HR stats or HR zones. No power, or FTP missing/0 → no %FTP, IF or zone time. Never a default (no 220-age), never a fallback to current settings.
-- **Formulas:** NP = 4th root of the mean of the 4th power of the 30 s rolling average power. Zeros count in average power. %FTP = power / snapshot FTP.
+- **Formulas:** NP = 4th root of the mean of the 4th power of the 30 s rolling average power. Zeros count in average power and in average cadence (Rouvy's own average cadence counts coasting: 93 with zeros, 94 without, on the route fixture). Climbing = the sum of every rise in altitude (230.8 m vs Rouvy's 231). %FTP = avg power / snapshot FTP, as a whole percent.
 - **One source per number.** Rouvy's numbers cover the whole ride (`get_activity`). Our FIT-derived numbers cover only splits and windows. The two never meet in one result, and the difference is never shown. A test checks that a whole-ride window's NP lands close to Rouvy's NP (§9).
 
 Sources: [MCP tool surface and raw-data shape](https://github.com/scastiel/rouvymcp/issues/7), [Source of Activity summary numbers and rider settings](https://github.com/scastiel/rouvymcp/issues/10), [Politeness and caching](https://github.com/scastiel/rouvymcp/issues/12), [Assemble the M1 spec](https://github.com/scastiel/rouvymcp/issues/13). Prototype tool shapes: branch [`prototype/tool-surface`](https://github.com/scastiel/rouvymcp/tree/prototype/tool-surface).
@@ -234,8 +235,9 @@ Sources: [Resilience to Rouvy API drift](https://github.com/scastiel/rouvymcp/is
 
 - **Unit/integration tests on committed, redacted real fixtures:**
   - one `activities-pagination.data` page and one `/activity/<id>.data` payload: ids, uid, names, email and `exportLink` replaced; geometry and `timeseries` cut short;
-  - one real FIT file trimmed to about 2 minutes, positions set to FIT's invalid value, timestamps shifted. `fit-file-parser` only reads FIT, so redaction is **our own small script**: rewrite records in place, then fix the header data size and the CRC. No FIT encoder dependency.
-- **Whole-ride NP check:** our NP over a whole-ride window lands close to Rouvy's NP. It runs on fixtures and in `contract:live`.
+  - one real FIT file, positions set to FIT's invalid value, timestamps shifted. `fit-file-parser` only reads FIT, so redaction is **our own small script** (`scripts/redact-activity-file.mjs`): rewrite fields in place, then fix the CRCs. No FIT encoder dependency.
+  - **Changed while building [#18](https://github.com/scastiel/rouvymcp/issues/18):** the FIT fixture is the **whole ride** (~50 KB, 1958 s), not a 2-minute trim, because the whole-ride NP check needs Rouvy's NP for the same records. It's the route detail fixture's Activity, shifted to that fixture's start. The script also blanks sensor serial numbers and names (`device_info`) and sets the activity's local timestamp to invalid (it gives away the rider's UTC offset). It rewrites in place without trimming, so the data size never changes.
+- **Whole-ride NP check:** our NP over a whole-ride window lands close to Rouvy's NP (within 2%: 194.8 W vs 197 W on the route fixture). It runs on fixtures and in `contract:live`.
 - **Daily account-free canary** (scheduled GitHub Actions, real UA, ~4 requests, opens a GitHub issue on failure):
   - anonymous `GET` of `resources/activities-pagination.data` and `/activity/<bogus>.data` → expect 202 + turbo-stream v2 `SingleFetchRedirect` to `account.rouvy.com/sign-in`. Cloudflare 403 HTML = UA rule changed. Decode failure = encoding changed.
   - bogus-credential Firebase `signInWithPassword` with the pinned key → expect `INVALID_LOGIN_CREDENTIALS`, not `API_KEY_INVALID`;

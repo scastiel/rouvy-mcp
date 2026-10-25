@@ -25,6 +25,19 @@ export const WORKOUT_ACTIVITY = "260703200246-fixture1";
 export const fixtureDetail = (name: "route" | "workout") =>
   readFileSync(new URL(`./fixtures/activity-${name}.data`, import.meta.url), "utf8");
 
+/** The fake network's key for one Activity's Activity file (the detail fixtures' `exportLink`). */
+export const activityFile = (activityId: string) =>
+  `activities.virtualtraining.eu/export/activity_export_fit_${activityId}.fit`;
+
+/**
+ * The route Activity's real Activity file, redacted: the whole ride, positions set to FIT's invalid
+ * value, sensor names blanked, timestamps shifted to the route detail fixture's start.
+ */
+export const fixtureActivityFile = (): ArrayBuffer => {
+  const bytes = readFileSync(new URL("./fixtures/activity-route.fit", import.meta.url));
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+};
+
 /** Virtual time: sleeping advances it instantly. */
 export function fakeClock(start = 1_800_000_000_000): Clock & { advance(ms: number): void } {
   let now = start;
