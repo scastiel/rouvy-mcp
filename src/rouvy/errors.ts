@@ -20,6 +20,10 @@ export function rouvyUnavailable(status: number): RouvyError {
   return new RouvyError(`Rouvy is unavailable right now (HTTP ${status}). Try later.`);
 }
 
+export function activityNotFound(): RouvyError {
+  return new RouvyError("Activity not found. Use an id returned by list_activities.");
+}
+
 export function apiChanged(route: string, field: string): RouvyError {
   return new RouvyError(
     `Rouvy changed its API: ${route} no longer has ${field}. ` +
