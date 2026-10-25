@@ -1,0 +1,48 @@
+name: Rouvy drift canary
+
+# Account-free: anonymous GETs to Rouvy and one made-up sign-in at Firebase, ~4 requests a day.
+# No Rouvy credentials here, ever: `npm run contract:live` is for the maintainer's machine.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - id: canary
+        run: npm run canary
+        env:
+          CANARY_REPORT: ${{ runner.temp }}/canary-report.md
+      - name: Open or update the drift issue
+        if: failure() && steps.canary.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT: ${{ runner.temp }}/canary-report.md
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Rouvy drift canary failed"
+          {
+            echo "The daily canary failed on $(date -u +%F): Rouvy may have changed something rouvy-mcp relies on."
+            echo
+            if [ -s "$REPORT" ]; then cat "$REPORT"; else echo "No report was written: see the run log."; fi
+            echo
+            echo "Run: $RUN_URL"
+          } > body.md
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file body.md
+          else
+            gh issue create --title "$title" --body-file body.md
+          fi
