@@ -1,5 +1,4 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { McpServer, type CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { VERSION } from "./constants.js";
 import type { CredentialsProvider } from "./credentials/types.js";
@@ -53,10 +52,10 @@ export function createServer({
       description:
         "List the rider's Rouvy Activities, newest first, as compact rows (id, title, type, start, moving time, " +
         "distance, elevation, TSS, IF). Use the ids with the other tools.",
-      inputSchema: {
+      inputSchema: z.object({
         limit: z.number().int().min(1).max(50).default(10).describe("How many Activities to return (1–50)."),
         offset: z.number().int().min(0).default(0).describe("How many of the newest Activities to skip."),
-      },
+      }),
     },
     (input) => toolResult(() => listActivities(rouvy, input)),
   );
@@ -69,9 +68,9 @@ export function createServer({
         "kcal, NP, IF, TSS, power peaks, min/max/avg power, heart rate, cadence and speed, %FTP, time in power and " +
         "HR zones, laps and route segment results. Also the Rider settings used (FTP, weight, max HR, zones) from " +
         "the Activity snapshot, which data exist, and a note for each value left out.",
-      inputSchema: {
+      inputSchema: z.object({
         activity_id: activityId,
-      },
+      }),
     },
     (input) => toolResult(() => getActivity(rouvy, input)),
   );
@@ -84,10 +83,10 @@ export function createServer({
         "For each split: start/end second, avg, NP and max power, avg power as %FTP, avg/max heart rate, " +
         "avg cadence, avg speed, distance and climbing. %FTP uses the FTP from the Activity snapshot. " +
         "A note says why any stat is left out.",
-      inputSchema: {
+      inputSchema: z.object({
         activity_id: activityId,
         every_sec: z.number().int().min(10).default(300).describe("Split length in seconds (at least 10)."),
-      },
+      }),
     },
     (input) => toolResult(() => getActivityIntervals(rouvy, input)),
   );
@@ -100,11 +99,11 @@ export function createServer({
         "file: the same stats as one split of get_activity_intervals, plus the best efforts (peak powers for " +
         "the durations that fit), the first half vs the second half, and HR:power decoupling between them. " +
         "%FTP uses the FTP from the Activity snapshot. A note says why any stat is left out.",
-      inputSchema: {
+      inputSchema: z.object({
         activity_id: activityId,
         start_sec: z.number().int().min(0).describe("Window start, in seconds from the start of the Activity."),
         end_sec: z.number().int().min(1).describe("Window end, in seconds from the start (after start_sec)."),
-      },
+      }),
     },
     (input) => toolResult(() => getWindowStats(rouvy, input)),
   );
@@ -119,7 +118,7 @@ export function createServer({
         `distance m from the start. At most ${MAX_STREAM_POINTS} points per field: a finer request is served at ` +
         "the smallest resolution that fits. A field the Activity doesn't have is listed in missing_fields; a " +
         "bucket with no data is null.",
-      inputSchema: {
+      inputSchema: z.object({
         activity_id: activityId,
         fields: z
           .array(z.enum(STREAM_FIELDS))
@@ -134,7 +133,7 @@ export function createServer({
           .min(1)
           .optional()
           .describe("End, in seconds from the start (after start_sec; default the end of the Activity)."),
-      },
+      }),
     },
     (input) => toolResult(() => getActivityStreams(rouvy, input)),
   );
@@ -147,10 +146,10 @@ export function createServer({
           "Save one Activity to the rider's export folder: its Activity file as downloaded from Rouvy (fit), or " +
           "its per-second records as CSV (csv). Overwrites an earlier export of the same Activity and returns " +
           "the file's absolute path.",
-        inputSchema: {
+        inputSchema: z.object({
           activity_id: activityId,
           format: z.enum(EXPORT_FORMATS).default("csv").describe("fit: the Activity file; csv: per-second records."),
-        },
+        }),
       },
       (input) => toolResult(() => exportActivityFile(rouvy, storage, input)),
     );
