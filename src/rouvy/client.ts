@@ -1,6 +1,8 @@
+import { parseActivityFile, type ActivityFile } from "../activity-file/parse.js";
+import { createActivityFileCache } from "./activity-file-cache.js";
 import type { Clock } from "./clock.js";
 import { createDetailCache } from "./detail-cache.js";
-import { activityNotFound, apiChanged, notLoggedIn, rouvyUnavailable } from "./errors.js";
+import { activityNotFound, apiChanged, noActivityFile, notLoggedIn, rouvyUnavailable } from "./errors.js";
 import { createListCache } from "./list-cache.js";
 import type { SessionManager } from "./session-manager.js";
 import {
@@ -22,11 +24,13 @@ export const LIST_PAGE_SIZE = 10;
 export interface RouvyClient {
   listActivitiesPage(offset: number): Promise<ActivityListRow[]>;
   getActivity(activityId: string): Promise<ActivityDetail>;
+  getActivityFile(activityId: string): Promise<ActivityFile>;
 }
 
 export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: SessionManager, clock: Clock): RouvyClient {
   const listCache = createListCache(clock);
   const detailCache = createDetailCache(clock);
+  const activityFileCache = createActivityFileCache();
 
   async function getData(
     route: string,
@@ -74,7 +78,34 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
     }
   }
 
+  async function getActivity(activityId: string): Promise<ActivityDetail> {
+    const uid = await sessions.uid();
+    const cached = detailCache.get(uid, activityId);
+    if (cached) return cached;
+    const payload = await getData(DETAIL_ROUTE, `/activity/${encodeURIComponent(activityId)}.data`, {
+      onNotFound: activityNotFound,
+    });
+    const detail = parseActivityDetail(payload);
+    detailCache.set(uid, activityId, detail);
+    return detail;
+  }
+
   return {
+    getActivity,
+    async getActivityFile(activityId) {
+      const uid = await sessions.uid();
+      const cached = activityFileCache.get(uid, activityId);
+      if (cached) return cached;
+      const { exportLink } = await getActivity(activityId);
+      if (!exportLink) throw noActivityFile();
+      // A capability URL, the one the web app's Export button uses: no cookies, and never shown.
+      const response = await fetch(exportLink);
+      if (response.status === 403 || response.status === 404) throw noActivityFile();
+      if (response.status !== 200) throw rouvyUnavailable(response.status);
+      const file = await parseActivityFile(await response.arrayBuffer());
+      activityFileCache.set(uid, activityId, file);
+      return file;
+    },
     async listActivitiesPage(offset) {
       // The cache key comes from the stored Credentials so a hit costs no request, not even a renewal.
       // The Session is renewed whenever the stored uid changes, so both uids agree.
@@ -87,17 +118,6 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
       const rows = parseActivityListPage(payload);
       listCache.set(uid, offset, rows);
       return rows;
-    },
-    async getActivity(activityId) {
-      const uid = await sessions.uid();
-      const cached = detailCache.get(uid, activityId);
-      if (cached) return cached;
-      const payload = await getData(DETAIL_ROUTE, `/activity/${encodeURIComponent(activityId)}.data`, {
-        onNotFound: activityNotFound,
-      });
-      const detail = parseActivityDetail(payload);
-      detailCache.set(uid, activityId, detail);
-      return detail;
     },
   };
 }

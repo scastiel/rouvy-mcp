@@ -24,6 +24,14 @@ export function activityNotFound(): RouvyError {
   return new RouvyError("Activity not found. Use an id returned by list_activities.");
 }
 
+/** Rouvy has no Activity file for this Activity (none offered, or 403/404 at the export URL). Not drift. */
+export function noActivityFile(): RouvyError {
+  return new RouvyError(
+    "No Activity file for this Activity: intervals, window stats, streams and export aren't available. " +
+      "get_activity still works.",
+  );
+}
+
 export function apiChanged(route: string, field: string): RouvyError {
   return new RouvyError(
     `Rouvy changed its API: ${route} no longer has ${field}. ` +

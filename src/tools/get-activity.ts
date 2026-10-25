@@ -1,5 +1,6 @@
 import type { RouvyClient } from "../rouvy/client.js";
 import type { ActivityDetail, Aggregates, MinMaxAvg } from "../rouvy/schemas.js";
+import { dataChannels, dropEmpty, tidy, type DataChannels } from "./common.js";
 
 export interface GetActivityInput {
   activity_id: string;
@@ -29,12 +30,7 @@ export async function getActivity(rouvy: RouvyClient, { activity_id }: GetActivi
     notes.push(`Rouvy gave no ${what}; left out.`);
   };
 
-  const has = {
-    power: hasData(total.aggrs?.pwrW),
-    heart_rate: hasData(total.aggrs?.hr),
-    cadence: hasData(total.aggrs?.cadRPM),
-    speed: hasData(total.aggrs?.spdMs),
-  };
+  const has = dataChannels(total.aggrs);
   const ftp = snapshot.FTP || undefined;
   const powerZones = zoneRanges(snapshot.zones?.pwr);
   const hrZones = zoneRanges(snapshot.zones?.hr);
@@ -113,16 +109,11 @@ export async function getActivity(rouvy: RouvyClient, { activity_id }: GetActivi
   return dropEmpty(summary);
 }
 
-/** Whether a data channel was recorded at all. Rouvy reports a missing sensor as zeros or nothing. */
-function hasData(stats: MinMaxAvg): boolean {
-  return (stats?.max ?? 0) > 0;
-}
-
 function minMaxAvg(stats: MinMaxAvg) {
   return { min: tidy(stats?.min), max: tidy(stats?.max), avg: tidy(stats?.avg) };
 }
 
-function aggregates(aggrs: Aggregates, has: Record<"power" | "heart_rate" | "cadence" | "speed", boolean>) {
+function aggregates(aggrs: Aggregates, has: DataChannels) {
   return {
     power_w: has.power ? minMaxAvg(aggrs?.pwrW) : undefined,
     heart_rate_bpm: has.heart_rate ? minMaxAvg(aggrs?.hr) : undefined,
@@ -176,20 +167,4 @@ function segments(activity: ActivityDetail["activity"], has: Record<"heart_rate"
       avg_hr_bpm: has.heart_rate ? tidy(pass.avgHeartRateBPM) : undefined,
     };
   });
-}
-
-/** Rouvy's floats carry noise (1802.7200000000003): two decimals are plenty. */
-function tidy(value: number | null | undefined): number | undefined {
-  return value == null ? undefined : Math.round(value * 100) / 100;
-}
-
-/** Leaves out every null or undefined value, at any depth, so a missing number never reads as 0. */
-function dropEmpty<T>(value: T): T {
-  if (Array.isArray(value)) return value.map(dropEmpty) as T;
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).filter(([, v]) => v != null).map(([k, v]) => [k, dropEmpty(v)]),
-    ) as T;
-  }
-  return value;
 }
