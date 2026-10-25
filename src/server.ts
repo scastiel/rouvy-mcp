@@ -9,7 +9,11 @@ import { systemClock, type Clock } from "./rouvy/clock.js";
 import { RouvyError } from "./rouvy/errors.js";
 import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
+import { getActivity } from "./tools/get-activity.js";
 import { listActivities } from "./tools/list-activities.js";
+
+/** Rouvy's Activity id shape: the start as YYMMDDhhmmss, then an 8-character suffix. */
+const ACTIVITY_ID = /^\d{12}-[a-z0-9]{8}$/;
 
 export interface ServerOptions {
   credentials: CredentialsProvider;
@@ -35,6 +39,24 @@ export function createServer({ credentials, fetch = globalThis.fetch, clock = sy
       },
     },
     (input) => toolResult(() => listActivities(rouvy, input)),
+  );
+
+  server.registerTool(
+    "get_activity",
+    {
+      description:
+        "One Activity's summary, with Rouvy's own numbers (they match the Rouvy app): times, distance, elevation, " +
+        "kcal, NP, IF, TSS, power peaks, min/max/avg power, heart rate, cadence and speed, %FTP, time in power and " +
+        "HR zones, laps and route segment results. Also the Rider settings used (FTP, weight, max HR, zones) from " +
+        "the Activity snapshot, which data exist, and a note for each value left out.",
+      inputSchema: {
+        activity_id: z
+          .string()
+          .regex(ACTIVITY_ID, "an Activity id as returned by list_activities (YYMMDDhhmmss-xxxxxxxx)")
+          .describe("An Activity id as returned by list_activities."),
+      },
+    },
+    (input) => toolResult(() => getActivity(rouvy, input)),
   );
 
   return server;

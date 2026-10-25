@@ -176,6 +176,7 @@ Full redacted endpoint catalog: [Appendix A](#appendix-a-rouvy-web-api).
 - **Decoding:** `SingleFetchRedirect` is a turbo-stream custom type, so the decoder registers a plugin for it (as React Router does); without one, `decode` throws.
 - **Activity list:** `GET /resources/activities-pagination.data?offset=<n>&firebaseUid=<uid>&_routes=routes%2Fresources.activities-pagination`. Session cookie and the user's own uid required. Pages of 10, row `offset`. End of list = empty `activities` array.
 - **Activity detail:** `GET /activity/<activityId>.data` (~460 KB). Uses `activity` (summary numbers, the snapshot under `activity.user`, laps, segment passes) and `exportLink`. Ignores the embedded `timeseries` (undocumented numeric keys): per-second data comes from the Activity file.
+- **Unknown Activity id:** after the cookie redirect above, Rouvy answers **HTTP 404** (with a turbo-stream error body, never decoded or shown) → *Activity not found*. The tool only accepts ids shaped `^\d{12}-[a-z0-9]{8}$`, so nothing else reaches the URL path. Found while building [#17](https://github.com/scastiel/rouvymcp/issues/17).
 - **Activity file:** `GET https://activities.virtualtraining.eu/export/activity_export_fit_<activityId>.fit`. Raw, uncompressed FIT on Google Cloud Storage. **No authentication**: it's a capability URL, so treat ids and the URL as secrets. Take the URL from `exportLink` (the route the web app uses). 403/404 there = *no Activity file* (§8).
 - **`parseActivityFile()`** wraps `fit-file-parser` and maps only the fields we need into our own camelCase types: 1 Hz `record`s (`timestamp`, `heart_rate` when an HR strap was paired, `cadence`, `speed`, `power`, `altitude`, `distance`, `position_lat/long`), plus session and lap. Rouvy's files have no compressed timestamps and no developer fields. `fit-file-parser`'s `force` (skip CRC) defaults to true: set it deliberately.
 - **Lenient schemas at the boundary:** validate only the fields we use, ignore unknown keys. A missing **required** field (id, start time, `exportLink`…) raises *Rouvy changed its API*, naming the route and field. A missing **optional** field (NP, HR aggregates…) is left out with a note.
@@ -331,11 +332,16 @@ Decoded `["routes/resources.activities-pagination"].data`:
 
 | key | contents |
 |---|---|
-| `activity` | the list item fields, plus `user.{FTP, weightKg, maxHr, zones{hr[7], pwr[7]}}` (the Activity snapshot); `total.{NP, IF, TSS, PP[7], elapsedTimeSec, zeroWTimeSec, aggrs{cadRPM,hr,pwrW,spdMs}{min,max,avg}, hists{hr[7],pwr[7]}}`; `checkStatus`, `failedValidators`, `drafting`, `eventSessionId`, `executionScore`, `rateOfPerceivedExertion`, `laps[]`, `segmentsPasses[]`, `timeseries[]` |
+| `activity` | the list item fields, plus `user.{FTP, weightKg, maxHr, zones{hr[7], pwr[7]}}` (the Activity snapshot); `total.{NP, IF, TSS, PP[7], elapsedTimeSec, zeroWTimeSec, aggrs{cadRPM,hr,pwrW,spdMs}{min,max,avg}, hists{hr[7],pwr[7]}}`; `checkStatus`, `failedValidators`, `drafting`, `eventSessionId`, `executionScore`, `rateOfPerceivedExertion`, `laps[]{name, startOffsetSec, elapsedTimeSec, distM, aggrs, targetPower}`, `segmentsPasses[]{id, elapsedTimeSeconds, avgPowerWatts, avgSpeedMetersPerSecond, avgHeartRateBPM, leaderboards}`, `route{…, segments[]{id, name, type, distanceMeters, elevationMeters, averageGrade}}` (names the segment passes), `timeseries[]` |
 | `exportLink` | the Activity file URL |
 | `userFtp`, `userMaxHr`, `userData{ftp, weight, zoneValues}` | current Rider settings (not used) |
 | `route`, `geometry` | route overview and profile points (not used) |
 | `isOwner`, `currentUserUid`, `providers[]`, leaderboards, … | page furniture (not used) |
+
+Seen on real captures (2026-10-25):
+- `zones.pwr` / `zones.hr` are the 7 zone **tops**; the last is a sentinel (`6000` W, `300` bpm), so zone 7 is open-ended. `hists.pwr` / `hists.hr` are seconds per zone (they sum to the elapsed time).
+- `PP` is 5 s, 30 s, 1 min, 5 min, 20 min, 30 min, 60 min; a peak longer than the ride is `0`.
+- `laps` is empty on route rides; workouts have one lap per workout step.
 
 `timeseries` (not used; for reference): per-second `{key, values[]}`. `1` HR, `2` cadence, `3` speed m/s, `4` power, `5` altitude, `12`/`RouteDistance` distance, `18`/`19` lat/lon, `16` and `102` unknown.
 

@@ -15,6 +15,16 @@ export const AUTH_DATA = "account.rouvy.com/resources/auth.data";
 /** Page 0 of a real rider's Activity list, redacted (7 Activities, so it's also the last page). */
 export const fixturePage0 = () => readFileSync(new URL("./fixtures/activities-page-0.data", import.meta.url), "utf8");
 
+export const DETAIL_ROUTE = "routes/_main.activity.$id";
+/** The fake network's key for one Activity's detail payload. */
+export const detail = (activityId: string) => `riders.rouvy.com/activity/${activityId}.data`;
+
+/** Real Activity detail payloads, redacted: a ride on a route (with segment passes), a workout (with laps). */
+export const ROUTE_ACTIVITY = "260624154125-fixture0";
+export const WORKOUT_ACTIVITY = "260519023818-fixture1";
+export const fixtureDetail = (name: "route" | "workout") =>
+  readFileSync(new URL(`./fixtures/activity-${name}.data`, import.meta.url), "utf8");
+
 /** Virtual time: sleeping advances it instantly. */
 export function fakeClock(start = 1_800_000_000_000): Clock & { advance(ms: number): void } {
   let now = start;
