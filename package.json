@@ -31,7 +31,9 @@
     "url": "https://github.com/scastiel/rouvy-mcp/issues"
   },
   "scripts": {
+    "prebuild": "node scripts/write-version.mjs",
     "build": "tsc -p tsconfig.build.json",
+    "version": "node scripts/write-version.mjs && git add src/version.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "canary": "vitest run --config vitest.live.config.ts canary.live",

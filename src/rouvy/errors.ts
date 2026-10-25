@@ -10,10 +10,23 @@ export class RouvyError extends Error {
   override name = "RouvyError";
 }
 
-export function notLoggedIn(): RouvyError {
-  return new RouvyError(
-    `Not logged in to Rouvy (or the login expired). Run \`${LOGIN_COMMAND}\` in a terminal, then retry.`,
-  );
+/** No Session could be opened. Terminal when the stored login is dead, rather than Rouvy or Firebase having a moment. */
+class NotLoggedInError extends RouvyError {
+  constructor(readonly terminal: boolean) {
+    super(`Not logged in to Rouvy (or the login expired). Run \`${LOGIN_COMMAND}\` in a terminal, then retry.`);
+  }
+}
+
+export function notLoggedIn({ terminal }: { terminal: boolean }): RouvyError {
+  return new NotLoggedInError(terminal);
+}
+
+/**
+ * Whether a failure means the rider's login is over (spec-m2 §6): the hosted server ends the
+ * Grant then. Anything else, an unavailable Rouvy included, is worth trying again later.
+ */
+export function isTerminalAuthFailure(error: unknown): boolean {
+  return error instanceof NotLoggedInError && error.terminal;
 }
 
 /** A 5xx (with its status) or a network error (without one). */

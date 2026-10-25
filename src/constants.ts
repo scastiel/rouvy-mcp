@@ -1,10 +1,6 @@
-import { readFileSync } from "node:fs";
+import { VERSION } from "./version.js";
 
-const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
-  version: string;
-};
-
-export const VERSION = packageJson.version;
+export { VERSION } from "./version.js";
 
 /** Sent on every request. Keep this shape: Cloudflare lets a semver'd `name/x.y.z (+url)` through. */
 export const USER_AGENT = `rouvy-mcp/${VERSION} (+https://github.com/scastiel/rouvy-mcp)`;

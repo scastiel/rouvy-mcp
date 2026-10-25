@@ -17,7 +17,7 @@ export async function signInWithPassword(fetch: typeof globalThis.fetch, email: 
     },
   );
   const body = (await readJson(response)) as { idToken?: string; refreshToken?: string; localId?: string };
-  if (!response.ok) throw new AuthError(describeFirebaseError(body));
+  if (!response.ok) throw toAuthError(body);
   if (!body.idToken || !body.refreshToken || !body.localId) throw new AuthError("Login failed: unexpected answer from Firebase.");
   return { idToken: body.idToken, refreshToken: body.refreshToken, uid: body.localId };
 }
@@ -30,31 +30,36 @@ export async function refreshIdToken(fetch: typeof globalThis.fetch, refreshToke
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
   });
   const body = (await readJson(response)) as { id_token?: string; refresh_token?: string; user_id?: string };
-  if (!response.ok) throw new AuthError(describeFirebaseError(body));
+  if (!response.ok) throw toAuthError(body);
   if (!body.id_token || !body.user_id) throw new AuthError("Refresh failed: unexpected answer from Firebase.");
   return { idToken: body.id_token, refreshToken: body.refresh_token ?? refreshToken, uid: body.user_id };
 }
 
-const PLAIN_MESSAGES: Record<string, string> = {
-  INVALID_LOGIN_CREDENTIALS: "Wrong email or password.",
-  INVALID_PASSWORD: "Wrong email or password.",
-  EMAIL_NOT_FOUND: "Wrong email or password.",
-  INVALID_EMAIL: "That doesn't look like an email address.",
-  TOO_MANY_ATTEMPTS_TRY_LATER: "Too many login attempts. Try again later.",
-  USER_DISABLED: "This Rouvy account is disabled.",
-  TOKEN_EXPIRED: "The login has expired.",
-  INVALID_REFRESH_TOKEN: "The login has expired.",
-  USER_NOT_FOUND: "The login has expired.",
+/**
+ * What each Firebase code tells the rider, and whether it's terminal: the credentials themselves
+ * are dead, so retrying can't help (spec-m2 §6). Anything else, unknown codes included, is transient.
+ */
+const FIREBASE_CODES: Record<string, { message: string; terminal: boolean }> = {
+  INVALID_LOGIN_CREDENTIALS: { message: "Wrong email or password.", terminal: true },
+  INVALID_PASSWORD: { message: "Wrong email or password.", terminal: true },
+  EMAIL_NOT_FOUND: { message: "Wrong email or password.", terminal: true },
+  INVALID_EMAIL: { message: "That doesn't look like an email address.", terminal: true },
+  TOO_MANY_ATTEMPTS_TRY_LATER: { message: "Too many login attempts. Try again later.", terminal: false },
+  USER_DISABLED: { message: "This Rouvy account is disabled.", terminal: true },
+  TOKEN_EXPIRED: { message: "The login has expired.", terminal: true },
+  INVALID_REFRESH_TOKEN: { message: "The login has expired.", terminal: true },
+  USER_NOT_FOUND: { message: "The login has expired.", terminal: true },
 };
 
 /**
  * Firebase answers `{ error: { message: "CODE" } }`, sometimes `"CODE : details"`, and the details
  * can echo what was submitted. Only the bare code is ever looked at.
  */
-function describeFirebaseError(body: unknown): string {
+function toAuthError(body: unknown): AuthError {
   const message = (body as { error?: { message?: unknown } } | null)?.error?.message;
   const code = typeof message === "string" ? /^[A-Z_]+/.exec(message)?.[0] : undefined;
-  return (code && PLAIN_MESSAGES[code]) ?? "Firebase refused the request.";
+  const known = code ? FIREBASE_CODES[code] : undefined;
+  return new AuthError(known?.message ?? "Firebase refused the request.", { terminal: known?.terminal ?? false });
 }
 
 async function readJson(response: Response): Promise<unknown> {
