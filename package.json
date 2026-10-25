@@ -1,8 +1,17 @@
 {
   "name": "rouvy-mcp",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Unofficial Rouvy MCP server",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "rouvy",
+    "cycling",
+    "indoor-cycling",
+    "fit"
+  ],
   "license": "MIT",
+  "author": "Sebastien Castiel",
   "type": "module",
   "bin": {
     "rouvy-mcp": "dist/bin.js"
@@ -17,12 +26,17 @@
     "type": "git",
     "url": "git+https://github.com/scastiel/rouvy-mcp.git"
   },
+  "homepage": "https://github.com/scastiel/rouvy-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/scastiel/rouvy-mcp/issues"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "canary": "vitest run --config vitest.live.config.ts canary.live",
-    "contract:live": "vitest run --config vitest.live.config.ts contract.live"
+    "contract:live": "vitest run --config vitest.live.config.ts contract.live",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
