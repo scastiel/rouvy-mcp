@@ -63,6 +63,20 @@ describe("get_activity_streams", () => {
     expect(body).not.toHaveProperty("notes");
   });
 
+  it("applies the cap to the stretch actually served, after clamping its end to the Activity file", async () => {
+    const { streams } = await routeActivity();
+
+    const body = JSON.parse(text(await streams({ fields: ["power"], resolution_sec: 1, start_sec: 900, end_sec: 9000 })));
+
+    // 900–1958 is 1058 s: 2 s would give 529 points, 3 s gives 353.
+    expect(body).toMatchObject({ start_sec: 900, end_sec: 1958, resolution_sec_used: 3 });
+    expect(body.streams.power).toHaveLength(353);
+    expect(body.notes).toEqual([
+      "The Activity file ends at 1958 s: the streams end there.",
+      "At most 500 points per field: served at 3 s instead of 1 s.",
+    ]);
+  });
+
   it("without a heart-rate strap, lists heart rate as missing instead of filling it with zeros", async () => {
     const { streams } = await routeActivity({
       change: ({ activity }) => {
@@ -98,7 +112,10 @@ describe("get_activity_streams", () => {
 
     expect(body.streams).toEqual({ power: [150, 200], heart_rate: [120, null], distance: [295, 895] });
     expect(body.missing_fields).toEqual(["altitude"]);
-    expect(body.notes).toEqual(["The Activity file has no altitude: altitude left out."]);
+    expect(body.notes).toEqual([
+      "The Activity file has no altitude: altitude left out.",
+      "The Activity file has no heart_rate for 1 of 2 buckets: null there.",
+    ]);
   });
 
   it("covers only the asked stretch, with buckets counted from start_sec", async () => {

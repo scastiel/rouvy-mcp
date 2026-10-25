@@ -1,5 +1,5 @@
 import type { RouvyClient } from "../rouvy/client.js";
-import { hasReadings, streams, type StreamField } from "../stats/streams.js";
+import { bucketMeans, hasReadings, type StreamField } from "../stats/streams.js";
 import { loadActivityFile } from "./activity-file-analysis.js";
 import { dropEmpty, type DataChannels } from "./common.js";
 import { InputError } from "./errors.js";
@@ -22,6 +22,10 @@ const CHANNEL_LABEL: Record<keyof DataChannels, string> = {
   speed: "speed",
 };
 
+function isChannel(field: StreamField): field is keyof DataChannels {
+  return field in CHANNEL_LABEL;
+}
+
 /** A downsampled view of an Activity file's per-second records, never the raw rows. */
 export async function getActivityStreams(
   rouvy: RouvyClient,
@@ -43,8 +47,8 @@ export async function getActivityStreams(
   const present: StreamField[] = [];
   const missing: StreamField[] = [];
   for (const field of new Set(fields)) {
-    if (field in CHANNEL_LABEL && !options.channels[field as keyof DataChannels]) {
-      notes.push(`No ${CHANNEL_LABEL[field as keyof DataChannels]} data in this Activity: ${field} left out.`);
+    if (isChannel(field) && !options.channels[field]) {
+      notes.push(`No ${CHANNEL_LABEL[field]} data in this Activity: ${field} left out.`);
       missing.push(field);
     } else if (!hasReadings(records, field)) {
       notes.push(`The Activity file has no ${field}: ${field} left out.`);
@@ -60,12 +64,18 @@ export async function getActivityStreams(
     notes.push(`At most ${MAX_STREAM_POINTS} points per field: served at ${resolutionSec} s instead of ${resolution_sec} s.`);
   }
 
+  const columns = bucketMeans(records, start_sec, endSec, resolutionSec, present);
+  for (const [field, column] of Object.entries(columns)) {
+    const gaps = column.filter((value) => value === null).length;
+    if (gaps > 0) notes.push(`The Activity file has no ${field} for ${gaps} of ${column.length} buckets: null there.`);
+  }
+
   return dropEmpty({
     activity_id,
     start_sec,
     end_sec: endSec,
     resolution_sec_used: resolutionSec,
-    streams: streams(records, start_sec, endSec, resolutionSec, present),
+    streams: columns,
     ...(missing.length > 0 && { missing_fields: missing }),
     ...(notes.length > 0 && { notes }),
   });

@@ -29,7 +29,7 @@ export function hasReadings(records: ActivityRecord[], field: StreamField): bool
  * `startSec <= sec < endSec`, the last bucket shorter when the window doesn't divide evenly.
  * A bucket with nothing to average is null, never 0.
  */
-export function streams(
+export function bucketMeans(
   records: ActivityRecord[],
   startSec: number,
   endSec: number,
