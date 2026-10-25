@@ -266,6 +266,7 @@ Sources: [Resilience to Rouvy API drift](https://github.com/scastiel/rouvymcp/is
 - **Node:** `engines: node >=22`; CI matrix on 22, 24, 26. Raise to 24 when 22 reaches end-of-life (April 2027).
 - **Releases:** `0.x` semver, published from GitHub Actions on tag with **npm trusted publishing** (provenance, no long-lived token). Fixes for Rouvy drift ship as patch releases. No update check or phone-home: the server makes no requests beyond Rouvy's.
 - **Visibility:** the repo stays private until M1 is usable. Then the public repo and the first npm release go out together, with the disclaimer (§11) in the README.
+- **Built ([#24](https://github.com/scastiel/rouvymcp/issues/24)):** `.github/workflows/release.yml` publishes on a `v<version>` tag after checking it matches `package.json`, and creates the GitHub release. npm only lets you configure a trusted publisher on a package that exists, so the name is reserved once with a hand-published, deprecated `0.0.0` placeholder; `0.1.0` is the first real release. Provenance needs a public repo, so the repo goes public before the tag. Maintainer steps: [`docs/releasing.md`](releasing.md). A test keeps the README's disclaimer identical to §11.
 
 Sources: [Transport and distribution](https://github.com/scastiel/rouvymcp/issues/8), [Resilience to Rouvy API drift](https://github.com/scastiel/rouvymcp/issues/11).
 
