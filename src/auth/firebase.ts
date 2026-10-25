@@ -7,7 +7,12 @@ export interface FirebaseTokens {
   uid: string;
 }
 
-export async function signInWithPassword(fetch: typeof globalThis.fetch, email: string, password: string): Promise<FirebaseTokens> {
+/** The tokens, plus the account's email as Firebase has it (the hosted allow-list checks it again). */
+export async function signInWithPassword(
+  fetch: typeof globalThis.fetch,
+  email: string,
+  password: string,
+): Promise<FirebaseTokens & { email?: string }> {
   const response = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${ROUVY_FIREBASE_WEB_KEY}`,
     {
@@ -16,10 +21,11 @@ export async function signInWithPassword(fetch: typeof globalThis.fetch, email: 
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     },
   );
-  const body = (await readJson(response)) as { idToken?: string; refreshToken?: string; localId?: string };
+  const body = (await readJson(response)) as { idToken?: string; refreshToken?: string; localId?: string; email?: unknown };
   if (!response.ok) throw toAuthError(body);
   if (!body.idToken || !body.refreshToken || !body.localId) throw new AuthError("Login failed: unexpected answer from Firebase.");
-  return { idToken: body.idToken, refreshToken: body.refreshToken, uid: body.localId };
+  const tokens = { idToken: body.idToken, refreshToken: body.refreshToken, uid: body.localId };
+  return typeof body.email === "string" ? { ...tokens, email: body.email } : tokens;
 }
 
 /** Trades a refresh token for a fresh idToken. Firebase may rotate the refresh token too. */

@@ -1,0 +1,28 @@
+# The hosted server (docs/spec-m2.md §3). Deploy with `npm run deploy`, never from the npm package.
+# Keep "rouvy" out of the name: it becomes the workers.dev hostname.
+name = "rides-mcp"
+main = "src/hosted/worker.ts"
+compatibility_date = "2026-10-01"
+# global_fetch_strictly_public: required for CIMD (the provider refuses to fetch client metadata without it).
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+
+[vars]
+# This deployment's origin. Its /mcp is the OAuth audience in every connector: never change it
+# once riders have connected.
+PUBLIC_URL = "https://rides-mcp.scastiel.workers.dev"
+
+# The allow-list is a secret, not a var: `npx wrangler secret put ALLOW_LIST`
+# (Rouvy emails, separated by commas or whitespace).
+
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+# `npx wrangler kv namespace create OAUTH_KV`, then paste its id here.
+id = "871d3d2175ad4cfe82a6c2c1de1ac2d0"
+
+[[durable_objects.bindings]]
+name = "RIDERS"
+class_name = "Riders"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Riders"]

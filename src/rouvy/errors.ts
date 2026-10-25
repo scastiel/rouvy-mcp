@@ -21,6 +21,11 @@ export function notLoggedIn({ terminal }: { terminal: boolean }): RouvyError {
   return new NotLoggedInError(terminal);
 }
 
+/** Whether a failure is "no Session could be opened", terminal or not. */
+export function isNotLoggedIn(error: unknown): boolean {
+  return error instanceof NotLoggedInError;
+}
+
 /**
  * Whether a failure means the rider's login is over (spec-m2 §6): the hosted server ends the
  * Grant then. Anything else, an unavailable Rouvy included, is worth trying again later.
