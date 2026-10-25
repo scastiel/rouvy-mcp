@@ -68,7 +68,8 @@ describe("the README's self-host section (docs/spec-m2.md §11)", () => {
     expect(section).toContain("global_fetch_strictly_public");
   });
 
-  it("puts it on a custom domain that never changes once riders have connected", () => {
+  it("pins a URL that never changes once riders have connected, on workers.dev or a custom domain", () => {
+    expect(section).toContain(".workers.dev");
     expect(section).toContain("custom_domain = true");
     expect(section).toMatch(/never change.*once riders have connected/is);
   });
