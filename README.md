@@ -2,7 +2,7 @@
 
 Unofficial Rouvy MCP server.
 
-It reads your own [Rouvy](https://rouvy.com) Activities and serves them to any MCP client (Claude Desktop, Claude Code, Cursor…): list your rides, read Rouvy's summary of one, and analyse its per-second data (splits, any stretch you pick, downsampled streams). Read-only, local and stdio only. Please read the [disclaimer](#disclaimer) before you use it.
+It reads your own [Rouvy](https://rouvy.com) Activities and serves them to any MCP client (Claude Desktop, Claude Code, Cursor…): list your Activities, read Rouvy's summary of one, and analyse its per-second data (splits, any stretch you pick, downsampled streams). Read-only, local and stdio only. Please read the [disclaimer](#disclaimer) before you use it.
 
 ## Install
 
@@ -14,7 +14,7 @@ You need Node.js 22 or later.
 npx -y rouvy-mcp login
 ```
 
-It asks for your Rouvy email and password (a Rouvy password: Google, Apple or Facebook sign-in alone won't do, but you can set a password on your Rouvy account). The password is never stored. Only a refresh token is kept, in `~/.config/rouvy-mcp/credentials.json` (`%APPDATA%\rouvy-mcp\credentials.json` on Windows), readable by you alone.
+It asks for your Rouvy email and password (a Rouvy password: Google, Apple or Facebook sign-in alone won't do, but you can set a password on your Rouvy account). The password is never stored. Only a refresh token is kept, in `$XDG_CONFIG_HOME/rouvy-mcp/credentials.json` (by default `~/.config/rouvy-mcp/credentials.json`; `%APPDATA%\rouvy-mcp\credentials.json` on Windows), readable by you alone.
 
 **2. Add the server to your MCP client.** For most clients, that's this entry in the MCP config:
 
@@ -56,7 +56,7 @@ Without it, the tool doesn't exist and rouvy-mcp writes nothing to disk besides 
 | Tool | What it gives |
 |---|---|
 | `list_activities` | Your Activities, newest first: id, title, type, start, moving time, distance, elevation, TSS, IF. |
-| `get_activity` | One Activity's summary with Rouvy's own numbers (NP, IF, TSS, power peaks, HR, zones, laps…) and the Rider settings stored with that ride. |
+| `get_activity` | One Activity's summary with Rouvy's own numbers (NP, IF, TSS, power peaks, HR, zones, laps…) and its Activity snapshot (the Rider settings Rouvy stored with it). |
 | `get_activity_intervals` | Fixed-size splits (every 5 min by default) from the per-second Activity file. |
 | `get_window_stats` | Stats for one stretch (e.g. a climb from 20:00 to 35:00): best efforts, first half vs second half, HR:power decoupling. |
 | `get_activity_streams` | Downsampled per-second data (power, heart rate, cadence, speed, altitude, distance), at most 500 points per field. |
@@ -68,16 +68,16 @@ Try asking: *"How did my last ride go? Compare the first and second half of the 
 
 ```sh
 npx -y rouvy-mcp login    # log in (or switch accounts)
-npx -y rouvy-mcp status   # who is logged in, and whether the login still works
+npx -y rouvy-mcp status   # who is logged in, and whether a Session can still be opened
 npx -y rouvy-mcp logout   # delete the credentials file
 ```
 
-`logout` deletes the stored login from your machine, but it can't revoke it on Rouvy's side. To make sure a copied credentials file stops working, change your Rouvy password.
+`logout` deletes the credentials file from your machine, but it can't revoke the refresh token on Rouvy's side. To make sure a copied credentials file stops working, change your Rouvy password.
 
 ## How it behaves
 
 - It only calls the routes Rouvy's own web app calls, one request at a time, with an honest user agent (`rouvy-mcp/<version>`). It never polls and makes no requests while idle.
-- If Rouvy's bot protection or rate limits push back, it stops and tells you when to try again, rather than retrying.
+- If Rouvy's bot protection or rate limits push back, it stops and tells you when to try again, rather than retrying. A server error or a network failure gets one retry, 2 s later, and an expired Session is renewed once.
 - No telemetry and no update check: the only requests it makes go to Rouvy.
 - Nothing is cached on disk.
 

@@ -35,8 +35,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "canary": "vitest run --config vitest.live.config.ts canary.live",
-    "contract:live": "vitest run --config vitest.live.config.ts contract.live",
-    "prepublishOnly": "npm run build"
+    "contract:live": "vitest run --config vitest.live.config.ts contract.live"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

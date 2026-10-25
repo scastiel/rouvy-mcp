@@ -10,8 +10,9 @@ Releases are `0.x` semver, published by [`.github/workflows/release.yml`](../.gi
 
    ```sh
    git checkout main && git pull
-   git tag v$(node -p "require('./package.json').version")
-   git push origin --tags
+   tag=v$(node -p "require('./package.json').version")
+   git tag "$tag"
+   git push origin "$tag"
    ```
 
 4. Watch the **Release** workflow. It refuses a tag that doesn't match `package.json`, runs typecheck, build and tests, publishes, then creates the GitHub release with generated notes.
