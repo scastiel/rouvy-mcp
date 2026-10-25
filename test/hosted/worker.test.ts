@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { firebaseError } from "../fakes.js";
 import { activityRow, LIST, listPage, REFRESH } from "../server-harness.js";
 import {
+  CONSENTED,
   connectRider,
   hostedWorker,
   MCP_URL,
@@ -52,6 +53,48 @@ describe("the sign-in page", () => {
     expect(html).toContain('type="password"');
   });
 
+  it("says it's unofficial and links to the privacy notice and to self-hosting", async () => {
+    const worker = hostedWorker();
+    const { page } = await openSignIn(worker, await registerClient(worker));
+
+    const html = await page.text();
+
+    expect(html).toContain("Test client wants to read your Rouvy rides");
+    expect(html).toContain("client.example.com");
+    expect(html).toContain("Unofficial, not affiliated with Rouvy");
+    expect(html).toContain('href="/privacy"');
+    expect(html).toContain('href="https://github.com/scastiel/rouvy-mcp#self-host-on-cloudflare"');
+  });
+
+  it("shows a client name containing HTML as text", async () => {
+    const worker = hostedWorker();
+    const { page } = await openSignIn(worker, await registerClient(worker, '<img src=x onerror="alert(1)">'));
+
+    const html = await page.text();
+
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&#60;img src=x onerror=&#34;alert(1)&#34;&#62; wants to read your Rouvy rides");
+  });
+
+  it("asks for consent again, boxes unticked, when a rider who already connected signs in again", async () => {
+    const worker = hostedWorker({
+      allowList: "rider@example.com",
+      routes: { [SIGN_IN]: signedIn("uid-1", "rider@example.com") },
+    });
+    const clientId = await registerClient(worker);
+    const first = await openSignIn(worker, clientId);
+    const connected = await submitSignIn(worker, first, { email: "rider@example.com", password: "pw", ...CONSENTED });
+    expect(connected.status).toBe(302);
+
+    const { page } = await openSignIn(worker, clientId);
+    const html = await page.text();
+
+    expect(page.status).toBe(200);
+    expect(html).toContain('<input name="accept_risk" type="checkbox" required>');
+    expect(html).toContain('<input name="consent_health" type="checkbox" required>');
+    expect(html).not.toContain("checked");
+  });
+
   it("turns away an email that isn't on the allow-list without asking Firebase", async () => {
     const worker = hostedWorker({
       allowList: "rider@example.com",
@@ -59,12 +102,13 @@ describe("the sign-in page", () => {
     });
     const signIn = await openSignIn(worker, await registerClient(worker));
 
-    const response = await submitSignIn(worker, signIn, { email: "stranger@example.com", password: "a guess" });
+    const response = await submitSignIn(worker, signIn, { email: "stranger@example.com", password: "a guess", ...CONSENTED });
 
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain("This instance is invite-only");
     expect(html).toContain("#self-host-on-cloudflare");
+    expect(response.headers.get("location")).toBeNull();
     expect(worker.network.requests).toHaveLength(0);
   });
 
@@ -72,7 +116,7 @@ describe("the sign-in page", () => {
     const worker = hostedWorker({ routes: { [SIGN_IN]: signedIn("uid-1", "rider@example.com") } });
     const signIn = await openSignIn(worker, await registerClient(worker));
 
-    const response = await submitSignIn(worker, signIn, { email: "rider@example.com", password: "pw" });
+    const response = await submitSignIn(worker, signIn, { email: "rider@example.com", password: "pw", ...CONSENTED });
 
     expect(await response.text()).toContain("This instance is invite-only");
     expect(worker.network.requests).toHaveLength(0);
@@ -85,7 +129,7 @@ describe("the sign-in page", () => {
     });
     const signIn = await openSignIn(worker, await registerClient(worker));
 
-    const response = await submitSignIn(worker, signIn, { email: "rider@example.com", password: "pw" });
+    const response = await submitSignIn(worker, signIn, { email: "rider@example.com", password: "pw", ...CONSENTED });
 
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("This instance is invite-only");
@@ -98,14 +142,71 @@ describe("the sign-in page", () => {
     });
     const signIn = await openSignIn(worker, await registerClient(worker));
 
-    const response = await submitSignIn(worker, signIn, { email: "rider@example.com", password: "wrong" });
+    const response = await submitSignIn(worker, signIn, { email: "rider@example.com", password: "wrong", ...CONSENTED });
     const html = await response.clone().text();
 
     expect(html).toContain("Wrong email or password.");
     expect(html).not.toContain("INVALID_LOGIN_CREDENTIALS");
     expect(html).not.toContain('value="wrong"');
     // A fresh form, so the rider can try again.
-    expect((await submitSignIn(worker, { page: response }, { email: "rider@example.com", password: "again" })).status).toBe(200);
+    expect((await submitSignIn(worker, { page: response }, { email: "rider@example.com", password: "again", ...CONSENTED })).status).toBe(200);
+  });
+});
+
+describe("consent on the sign-in page", () => {
+  it.each([
+    ["neither box", {}],
+    ["only the risk box", { accept_risk: "on" }],
+    ["only the health-data box", { consent_health: "on" }],
+  ])("refuses to connect with %s ticked, without asking Firebase", async (_, boxes) => {
+    const worker = hostedWorker({
+      allowList: "rider@example.com",
+      routes: { [SIGN_IN]: signedIn("uid-1", "rider@example.com") },
+    });
+    const signIn = await openSignIn(worker, await registerClient(worker));
+
+    const response = await submitSignIn(worker, signIn, { email: "rider@example.com", password: "pw", ...boxes });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Tick both boxes to connect.");
+    expect(worker.network.requests).toHaveLength(0);
+  });
+
+  it("tells a rider who isn't on the allow-list that it's invite-only before asking for the boxes", async () => {
+    const worker = hostedWorker({ allowList: "rider@example.com" });
+    const signIn = await openSignIn(worker, await registerClient(worker));
+
+    const response = await submitSignIn(worker, signIn, { email: "stranger@example.com", password: "pw" });
+
+    expect(await response.text()).toContain("This instance is invite-only");
+  });
+});
+
+describe("the privacy notice", () => {
+  it("is served at the /privacy the sign-in page links to", async () => {
+    const worker = hostedWorker();
+
+    const response = await worker.fetch("/privacy");
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(await response.text()).toContain("Privacy");
+  });
+});
+
+describe("cancelling on the sign-in page", () => {
+  it("sends the rider back to the client with access_denied, without asking Firebase", async () => {
+    const worker = hostedWorker();
+    const signIn = await openSignIn(worker, await registerClient(worker));
+
+    const response = await submitSignIn(worker, signIn, { action: "cancel" });
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(`${location.origin}${location.pathname}`).toBe("https://client.example.com/callback");
+    expect(location.searchParams.get("error")).toBe("access_denied");
+    expect(location.searchParams.get("state")).toBe("client-state");
+    expect(worker.network.requests).toHaveLength(0);
   });
 });
 

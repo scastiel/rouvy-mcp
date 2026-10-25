@@ -19,7 +19,9 @@ function page(title: string, body: string, init: ResponseInit = {}): Response {
   body { font: 16px/1.5 system-ui, sans-serif; max-width: 28rem; margin: 3rem auto; padding: 0 1rem; }
   label { display: block; margin: 1rem 0 0.25rem; }
   input { width: 100%; box-sizing: border-box; padding: 0.5rem; font: inherit; }
-  button { margin-top: 1.5rem; padding: 0.5rem 1.25rem; font: inherit; }
+  .consent { display: flex; gap: 0.5rem; align-items: flex-start; }
+  .consent input { width: auto; margin-top: 0.3rem; }
+  button { margin: 1.5rem 0.5rem 0 0; padding: 0.5rem 1.25rem; font: inherit; }
   .message { padding: 0.75rem; border: 1px solid #c33; border-radius: 4px; }
 </style>
 ${body}
@@ -60,6 +62,7 @@ export function signInPage({
     "Sign in to Rouvy",
     `<h1>${client} wants to read your Rouvy rides</h1>
 <p>Access will be sent to <strong>${escape(details.redirectHost)}</strong>.</p>
+<p>Unofficial, not affiliated with Rouvy.</p>
 ${notice}
 <form method="post">
   <input type="hidden" name="handle" value="${escape(handle)}">
@@ -67,9 +70,25 @@ ${notice}
   <input id="email" name="email" type="email" autocomplete="username" required value="${escape(email)}">
   <label for="password">Rouvy password</label>
   <input id="password" name="password" type="password" autocomplete="current-password" required>
-  <button type="submit">Connect</button>
-</form>`,
+  <label class="consent"><input name="accept_risk" type="checkbox" required>
+    <span>I understand that Rouvy's terms (§7.c, §14.a.vi) may not allow this, and that Rouvy could restrict or close my own Rouvy account. If Rouvy objects to or blocks this instance, it shuts down and deletes every connection within 24 hours.</span></label>
+  <label class="consent"><input name="consent_health" type="checkbox" required>
+    <span>I explicitly consent to this instance processing my ride data, which includes health data such as heart rate (GDPR Art. 9(2)(a)).</span></label>
+  <button type="submit" name="action" value="connect">Connect</button>
+  <button type="submit" name="action" value="cancel" formnovalidate>Cancel</button>
+</form>
+<p><a href="/privacy">Privacy notice</a> · <a href="${SELF_HOST_URL}">Host your own</a></p>`,
     { headers },
+  );
+}
+
+/** A stub until the legal-pages ticket lands the real notice (spec-m2 §10). */
+export function privacyPage(): Response {
+  return page(
+    "Privacy",
+    `<h1>Privacy</h1>
+<p>This unofficial instance reads your Rouvy rides only while answering your MCP client. Each connection stores, encrypted, your Rouvy refresh token, account id and email.</p>
+<p>The full privacy notice is coming soon.</p>`,
   );
 }
 

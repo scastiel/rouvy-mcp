@@ -2,6 +2,7 @@ import OAuthProvider, { type OAuthHelpers } from "@cloudflare/workers-oauth-prov
 import { DurableObject } from "cloudflare:workers";
 import { withUserAgent } from "../http.js";
 import { authorize } from "./authorize.js";
+import { privacyPage } from "./pages.js";
 import { createRidersHost, type GrantProps, type RidersHost } from "./riders.js";
 
 export interface Env {
@@ -42,9 +43,11 @@ function createProvider(publicUrl: string, fetch: typeof globalThis.fetch) {
     },
     defaultHandler: {
       fetch(request, env) {
-        if (new URL(request.url).pathname === "/authorize") {
+        const { pathname } = new URL(request.url);
+        if (pathname === "/authorize") {
           return authorize(request, { oauth: env.OAUTH_PROVIDER!, allowList: env.ALLOW_LIST, fetch });
         }
+        if (pathname === "/privacy") return privacyPage();
         return new Response("Not found", { status: 404 });
       },
     },

@@ -103,12 +103,12 @@ export function hostedWorker({ allowList, routes = {} }: { allowList?: string; r
 type Worker = ReturnType<typeof hostedWorker>;
 
 /** A public client registered through DCR, as Cursor (or claude.ai without CIMD) does. */
-export async function registerClient(worker: Worker): Promise<string> {
+export async function registerClient(worker: Worker, clientName = "Test client"): Promise<string> {
   const response = await worker.fetch("/register", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      client_name: "Test client",
+      client_name: clientName,
       redirect_uris: [REDIRECT_URI],
       token_endpoint_auth_method: "none",
       grant_types: ["authorization_code", "refresh_token"],
@@ -137,6 +137,9 @@ export async function openSignIn(worker: Worker, clientId: string) {
 }
 
 type SignInPage = Awaited<ReturnType<typeof openSignIn>>;
+
+/** Both consent boxes ticked, as a rider who agrees posts them. */
+export const CONSENTED = { accept_risk: "on", consent_health: "on" };
 
 /** Fills the sign-in form on a page and submits it from the same browser. */
 export async function submitSignIn(worker: Worker, { page }: Pick<SignInPage, "page">, fields: Record<string, string>) {
@@ -178,7 +181,7 @@ export async function exchangeCode(worker: Worker, signIn: SignInPage, redirect:
 /** The whole flow for an allow-listed rider: register, sign in, exchange the code. */
 export async function connectRider(worker: Worker, email: string): Promise<string> {
   const signIn = await openSignIn(worker, await registerClient(worker));
-  const redirect = await submitSignIn(worker, signIn, { email, password: "correct horse" });
+  const redirect = await submitSignIn(worker, signIn, { email, password: "correct horse", ...CONSENTED });
   if (redirect.status !== 302) throw new Error(`sign-in failed: ${redirect.status} ${await redirect.text()}`);
   return exchangeCode(worker, signIn, redirect);
 }
