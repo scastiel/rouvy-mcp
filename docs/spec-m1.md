@@ -1,5 +1,7 @@
 # rouvy-mcp — Milestone 1 spec
 
+> Hosted server: see [`spec-m2.md`](spec-m2.md).
+
 **Status:** build-ready. Produced by the wayfinding map [Map: Rouvy MCP server — milestone 1 (Activities data)](https://github.com/scastiel/rouvymcp/issues/1).
 Each section links the ticket its decisions come from. This document is the source of truth: if the build shows a decision is wrong, change it here in the same PR.
 
