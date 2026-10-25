@@ -25,7 +25,7 @@ Tests talk to the server over the SDK's in-memory pair and send raw `server/disc
 1. `npm run build`, then point each client at the build instead of npm: `"command": "node", "args": ["/absolute/path/to/rouvy-mcp/dist/bin.js"]` in Claude Desktop's `claude_desktop_config.json`, and `claude mcp add rouvy-local -- node /absolute/path/to/rouvy-mcp/dist/bin.js` in Claude Code.
 2. Restart the client: the server shows as connected, with its tools listed (`/mcp` in Claude Code).
 3. Ask for each tool in turn: your last Activities (`list_activities`), that Activity's summary (`get_activity`), its 5-minute splits (`get_activity_intervals`), stats from minute 10 to 20 (`get_window_stats`), its power and heart rate as a chart (`get_activity_streams`), and, with `ROUVY_MCP_EXPORT_DIR` set, an export to CSV (`export_activity_file`).
-4. Run `npx -y rouvy-mcp logout` (or point `XDG_CONFIG_HOME` at an empty folder), ask again: the answer is the *Not logged in* message naming `npx -y rouvy-mcp login`.
+4. Run `node dist/bin.js logout` (or point `XDG_CONFIG_HOME` at an empty folder), ask again: the answer is the *Not logged in* message naming `npx -y rouvy-mcp login`.
 5. Put the clients back on `rouvy-mcp@latest`.
 
 ## First release only (0.1.0)

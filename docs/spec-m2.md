@@ -184,7 +184,9 @@ Sources: [Rouvy token custody on the hosted server](https://github.com/scastiel/
 Changes to the shared core and to stdio, so that one `createServer()` serves both entry points:
 
 1. **SDK v2 migration first, on its own.** Swap the five v1 imports:
-   - `McpServer`, `StdioServerTransport` and `CallToolResult` move to `@modelcontextprotocol/server`;
+   - `McpServer` and `CallToolResult` move to `@modelcontextprotocol/server`;
+   - the bin serves through `serveStdio(() => createServer(...))` from `@modelcontextprotocol/server/stdio`, not a hand-wired `StdioServerTransport`: only `serveStdio` answers `server/discover` (a hand-wired instance answers `-32601`);
+   - tool input schemas are wrapped in `z.object(...)`: v2 deprecates raw shapes;
    - in tests, `InMemoryTransport` and `Client` move to `@modelcontextprotocol/client`.
 
    Check the stdio `bin` against Claude Desktop and Claude Code, then release **`0.2.0`** before any hosted code lands.

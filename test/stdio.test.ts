@@ -1,16 +1,16 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { beforeAll, describe, expect, it } from "vitest";
 
-const root = new URL("..", import.meta.url).pathname;
+const repoRoot = new URL("..", import.meta.url).pathname;
 
 /** Starts the built bin as an MCP client would, sends one raw JSON-RPC request and returns the first answer. */
 async function ask(request: Record<string, unknown>) {
   const config = mkdtempSync(join(tmpdir(), "rouvy-mcp-stdio-"));
-  const bin = spawn(process.execPath, [join(root, "dist/bin.js")], {
+  const bin = spawn(process.execPath, [join(repoRoot, "dist/bin.js")], {
     env: { ...process.env, XDG_CONFIG_HOME: config, APPDATA: config, ROUVY_MCP_EXPORT_DIR: "" },
     stdio: ["pipe", "pipe", "inherit"],
   });
@@ -21,13 +21,14 @@ async function ask(request: Record<string, unknown>) {
     throw new Error("The bin closed stdout without answering.");
   } finally {
     bin.kill();
+    rmSync(config, { recursive: true, force: true });
   }
 }
 
 describe("the stdio bin", () => {
   // The bin is what riders run: test the build, not the sources.
   beforeAll(() => {
-    execFileSync("npm", ["run", "build"], { cwd: root, stdio: "ignore" });
+    execFileSync("npm", ["run", "build"], { cwd: repoRoot, stdio: "ignore" });
   }, 60_000);
 
   it("answers server/discover at 2026-07-28", async () => {
