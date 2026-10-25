@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { FitBaseType, FitEncoder } from "fit-file-parser";
 import { encode } from "turbo-stream";
 import type { Clock } from "../src/rouvy/clock.js";
 import type { Credentials, CredentialsProvider } from "../src/credentials/types.js";
@@ -37,6 +38,39 @@ export const fixtureActivityFile = (): ArrayBuffer => {
   const bytes = readFileSync(new URL("./fixtures/activity-route.fit", import.meta.url));
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 };
+
+/** One second of a synthetic Activity file, in natural units; a channel left out isn't written. */
+export interface SyntheticRecord {
+  power?: number;
+  heartRate?: number;
+  altitude?: number;
+  distance?: number;
+}
+
+/** A small Activity file, one record per second from 2026-01-01, for cases the real fixture can't show. */
+export function syntheticActivityFile(records: SyntheticRecord[]): ArrayBuffer {
+  const encoder = new FitEncoder();
+  const start = FitEncoder.toFitTimestamp(new Date("2026-01-01T00:00:00Z"));
+  const localTypes = new Map<string, number>();
+  records.forEach((record, sec) => {
+    const fields = [{ number: 253, size: 4, baseType: FitBaseType.Uint32, value: start + sec }];
+    if (record.power != null) fields.push({ number: 7, size: 2, baseType: FitBaseType.Uint16, value: record.power });
+    if (record.heartRate != null) fields.push({ number: 3, size: 1, baseType: FitBaseType.Uint8, value: record.heartRate });
+    // FIT scales: altitude (m + 500) × 5, distance m × 100.
+    if (record.altitude != null) {
+      fields.push({ number: 2, size: 2, baseType: FitBaseType.Uint16, value: Math.round((record.altitude + 500) * 5) });
+    }
+    if (record.distance != null) {
+      fields.push({ number: 5, size: 4, baseType: FitBaseType.Uint32, value: Math.round(record.distance * 100) });
+    }
+    // Each field set gets its own local message type, so definitions never clash.
+    const shape = fields.map((f) => f.number).join(",");
+    if (!localTypes.has(shape)) localTypes.set(shape, localTypes.size);
+    encoder.writeMessage(20, fields, localTypes.get(shape));
+  });
+  const bytes = encoder.close();
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
 
 /** Virtual time: sleeping advances it instantly. */
 export function fakeClock(start = 1_800_000_000_000): Clock & { advance(ms: number): void } {

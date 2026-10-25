@@ -18,6 +18,8 @@ const FIT_EPOCH_SEC = 631_065_600;
 const INVALID_UINT32 = 0xffffffff;
 const INVALID_SINT32 = 0x7fffffff;
 
+// FIT global message numbers. FIT's "session" is the whole-Activity summary, not a Session.
+const FILE_ID = 0;
 const RECORD = 20;
 const SESSION = 18;
 const LAP = 19;
@@ -25,7 +27,7 @@ const ACTIVITY = 34;
 const DEVICE_INFO = 23;
 
 /** date_time fields, by global message number. Field 253 is the timestamp of every message. */
-const TIME_FIELDS = { [SESSION]: [2], [LAP]: [2] };
+const TIME_FIELDS = { [FILE_ID]: [4], [SESSION]: [2], [LAP]: [2] };
 /** The activity's local time: it gives away the rider's UTC offset, so it's set to invalid. */
 const LOCAL_TIMESTAMP = 5;
 /** Latitude/longitude fields (semicircles), by global message number. */
@@ -34,8 +36,8 @@ const POSITION_FIELDS = {
   [LAP]: [3, 4, 5, 6, 27, 28, 29, 30],
   [SESSION]: [3, 4, 29, 30, 31, 32, 38, 39, 40, 41],
 };
-/** Fields that name the rider's own sensors: serial number (uint32z, invalid 0) and product name. */
-const SENSOR_FIELDS = { serial: 3, productName: 27 };
+/** device_info fields that name the rider's own sensors: serial number (uint32z, invalid 0) and product name. */
+const SENSOR_FIELDS = [3, 27];
 
 const bytes = new Uint8Array(await readFile(input));
 const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -83,9 +85,7 @@ while (offset < end) {
       view.setUint32(at, value + shiftSec, littleEndian);
     } else if (POSITION_FIELDS[global]?.includes(field.num) && field.size === 4) {
       view.setInt32(at, INVALID_SINT32, littleEndian);
-    } else if (global === DEVICE_INFO && field.num === SENSOR_FIELDS.serial) {
-      bytes.fill(0, at, at + field.size);
-    } else if (global === DEVICE_INFO && field.num === SENSOR_FIELDS.productName) {
+    } else if (global === DEVICE_INFO && SENSOR_FIELDS.includes(field.num)) {
       bytes.fill(0, at, at + field.size);
     }
   }

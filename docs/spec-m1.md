@@ -137,7 +137,7 @@ Shared conventions:
 - **Input:** `activity_id`, `every_sec` (int ≥ 10, default 300).
 - **Output:** **fixed-size** splits; for each: start/end sec, avg / NP / max power, %FTP, avg/max HR, avg cadence, avg speed, distance, climbing.
 - **Source:** the Activity file.
-- **Built ([#18](https://github.com/scastiel/rouvymcp/issues/18)):** splits run from second 0 to the end of the records; the last one is shorter when the ride doesn't divide evenly. Which channels exist uses `get_activity`'s rule (Rouvy's `aggrs` max above 0), so `available_fields` and the splits agree. NP needs 30 s of data, so it's left out of shorter splits, with a note. Distance and climbing are measured from the last record before the split, so splits add up to the whole ride. A repeat call reuses the parsed Activity file (no download), but may fetch the detail again once its 10 min are up (the snapshot FTP comes from there).
+- **Built ([#18](https://github.com/scastiel/rouvymcp/issues/18)):** splits run from second 0 to the end of the records; the last one is shorter when the ride doesn't divide evenly. Which channels exist uses `get_activity`'s rule (Rouvy's `aggrs` max above 0), so `available_fields` and the splits agree. NP needs 30 s of data, so it's left out of shorter splits, with a note. A stat the Activity has but the Activity file lacks for some splits (HR, distance, altitude) is left out of those splits with a note counting them, never reported as 0. Seconds with no record aren't filled in: Rouvy's files are gapless 1 Hz (1958 records for 1958 s on the fixture), so "zeros count" applies to records that carry no power. Distance and climbing are measured from the last record before the split, so splits add up to the whole ride. A repeat call reuses the parsed Activity file (no download), but may fetch the detail again once its 10 min are up (the snapshot FTP comes from there).
 
 ### 5.4 `get_window_stats`
 
@@ -236,7 +236,7 @@ Sources: [Resilience to Rouvy API drift](https://github.com/scastiel/rouvymcp/is
 - **Unit/integration tests on committed, redacted real fixtures:**
   - one `activities-pagination.data` page and one `/activity/<id>.data` payload: ids, uid, names, email and `exportLink` replaced; geometry and `timeseries` cut short;
   - one real FIT file, positions set to FIT's invalid value, timestamps shifted. `fit-file-parser` only reads FIT, so redaction is **our own small script** (`scripts/redact-activity-file.mjs`): rewrite fields in place, then fix the CRCs. No FIT encoder dependency.
-  - **Changed while building [#18](https://github.com/scastiel/rouvymcp/issues/18):** the FIT fixture is the **whole ride** (~50 KB, 1958 s), not a 2-minute trim, because the whole-ride NP check needs Rouvy's NP for the same records. It's the route detail fixture's Activity, shifted to that fixture's start. The script also blanks sensor serial numbers and names (`device_info`) and sets the activity's local timestamp to invalid (it gives away the rider's UTC offset). It rewrites in place without trimming, so the data size never changes.
+  - **Changed while building [#18](https://github.com/scastiel/rouvymcp/issues/18):** the FIT fixture is the **whole ride** (~50 KB, 1958 s), not a 2-minute trim, because the whole-ride NP check needs Rouvy's NP for the same records. It's the route detail fixture's Activity, shifted to that fixture's start. The script also shifts `file_id.time_created`, blanks sensor serial numbers and names (`device_info`) and sets the activity's local timestamp to invalid (it gives away the rider's UTC offset). It rewrites in place without trimming, so the data size never changes.
 - **Whole-ride NP check:** our NP over a whole-ride window lands close to Rouvy's NP (within 2%: 194.8 W vs 197 W on the route fixture). It runs on fixtures and in `contract:live`.
 - **Daily account-free canary** (scheduled GitHub Actions, real UA, ~4 requests, opens a GitHub issue on failure):
   - anonymous `GET` of `resources/activities-pagination.data` and `/activity/<bogus>.data` → expect 202 + turbo-stream v2 `SingleFetchRedirect` to `account.rouvy.com/sign-in`. Cloudflare 403 HTML = UA rule changed. Decode failure = encoding changed.
@@ -354,7 +354,7 @@ Seen on real captures (2026-10-25):
 
 - Raw FIT, `application/octet-stream`, ~25 bytes per ride second. Google Cloud Storage, `cache-control: public, max-age=3600`, `last-modified` = ride end time (written at upload).
 - No auth, any UA. Wrong id suffix → 403 (no listing).
-- Contents: 8 definition messages; 1 Hz `record`s; 1 session; 1 lap; `activity`; `device_info` (`manufacturer: virtualtraining`, `product_name: Rouvy`); no `file_id`, no compressed timestamps, no developer fields.
+- Contents: 8 definition messages; 1 Hz `record`s; 1 session; 1 lap; `activity`; `device_info` (`manufacturer: virtualtraining`, `product_name: Rouvy`); a `file_id` (with `time_created`, the ride's start; seen while building [#18](https://github.com/scastiel/rouvymcp/issues/18)), no compressed timestamps, no developer fields.
 
 ### Login and session
 

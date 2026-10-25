@@ -10,11 +10,32 @@ export interface WindowOptions {
   ftp: number | undefined;
 }
 
+/** One window's stats. A stat the data can't support is left out, never 0. */
+export interface WindowStats {
+  start_sec: number;
+  end_sec: number;
+  avg_power_w?: number;
+  np_w?: number;
+  max_power_w?: number;
+  avg_power_pct_ftp?: number;
+  avg_hr_bpm?: number;
+  max_hr_bpm?: number;
+  avg_cadence_rpm?: number;
+  avg_speed_m_s?: number;
+  distance_m?: number;
+  climbing_m?: number;
+}
+
 /**
  * One window's stats, from the Activity file's 1 Hz records with `startSec <= sec < endSec`.
  * A channel the Activity doesn't have is left out, never reported as 0.
  */
-export function windowStats(records: ActivityRecord[], startSec: number, endSec: number, { channels, ftp }: WindowOptions) {
+export function windowStats(
+  records: ActivityRecord[],
+  startSec: number,
+  endSec: number,
+  { channels, ftp }: WindowOptions,
+): WindowStats {
   let from = records.findIndex((r) => r.sec >= startSec);
   if (from === -1) from = records.length;
   let to = records.findIndex((r) => r.sec >= endSec);
@@ -23,7 +44,7 @@ export function windowStats(records: ActivityRecord[], startSec: number, endSec:
   // Distance and climbing are measured from the last record before the window, so splits add up.
   const before = records[from - 1] ?? window[0];
 
-  const stats: Record<string, number | undefined> = { start_sec: startSec, end_sec: endSec };
+  const stats: WindowStats = { start_sec: startSec, end_sec: endSec };
   if (window.length === 0) return stats;
 
   if (channels.power) {
@@ -64,12 +85,13 @@ export function normalizedPower(power: number[]): number | undefined {
   return (sumOfFourthPowers / (power.length - NP_WINDOW_SEC + 1)) ** 0.25;
 }
 
-/** Metres gained: the sum of every rise in altitude. */
-function climbing(records: ActivityRecord[]): number {
-  let gained = 0;
+/** Metres gained: the sum of every rise in altitude. None without any altitude. */
+function climbing(records: ActivityRecord[]): number | undefined {
+  let gained: number | undefined;
   let previous: number | undefined;
   for (const { altitude } of records) {
     if (altitude == null) continue;
+    gained ??= 0;
     if (previous !== undefined && altitude > previous) gained += altitude - previous;
     previous = altitude;
   }

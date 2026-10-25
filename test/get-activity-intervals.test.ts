@@ -15,6 +15,7 @@ import {
   refreshes,
   ROUTE_ACTIVITY,
   rouvySessionOpened,
+  syntheticActivityFile,
   text,
   turboStream,
 } from "./server-harness.js";
@@ -136,7 +137,33 @@ describe("get_activity_intervals", () => {
     expect(body.splits).toHaveLength(196);
     expect(body.splits[0]).not.toHaveProperty("np_w");
     expect(body.splits[0]).toHaveProperty("avg_power_w");
-    expect(body.notes).toContain("NP needs at least 30 s of data: left out of splits shorter than that.");
+    expect(body.notes).toEqual(["NP needs at least 30 s of data: left out of 196 of 196 splits."]);
+  });
+
+  it("says why whenever the Activity file itself lacks data for a stat, and never reports it as 0", async () => {
+    // HR only for the first 30 s; no altitude or distance at all.
+    const records = Array.from({ length: 60 }, (_, sec) => ({ power: 200, ...(sec < 30 && { heartRate: 120 }) }));
+    const { intervals } = await routeActivity({
+      change: ({ activity }) => {
+        activity.total.aggrs.cadRPM = { min: 0, max: 0, avg: 0 };
+        activity.total.aggrs.spdMs = { min: 0, max: 0, avg: 0 };
+      },
+      file: () => new Response(syntheticActivityFile(records)),
+    });
+
+    const body = JSON.parse(text(await intervals({ every_sec: 30 })));
+
+    expect(body.splits).toEqual([
+      { start_sec: 0, end_sec: 30, avg_power_w: 200, np_w: 200, max_power_w: 200, avg_power_pct_ftp: 103, avg_hr_bpm: 120, max_hr_bpm: 120 },
+      { start_sec: 30, end_sec: 60, avg_power_w: 200, np_w: 200, max_power_w: 200, avg_power_pct_ftp: 103 },
+    ]);
+    expect(body.notes).toEqual([
+      "No cadence data in this Activity: cadence stats left out.",
+      "No speed data in this Activity: speed stats left out.",
+      "The Activity file has no heart rate for 1 of 2 splits: left out there.",
+      "The Activity file has no distance for 2 of 2 splits: left out there.",
+      "The Activity file has no altitude (climbing) for 2 of 2 splits: left out there.",
+    ]);
   });
 
   it("without a heart-rate strap, leaves out the HR stats and says why", async () => {

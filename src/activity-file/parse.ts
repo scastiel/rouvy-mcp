@@ -1,5 +1,6 @@
 import FitParser from "fit-file-parser";
 import { apiChanged } from "../rouvy/errors.js";
+import { dropEmpty } from "../tools/common.js";
 
 /** One second of an Activity file. A channel the rider didn't record is left out, never 0. */
 export interface ActivityRecord {
@@ -23,7 +24,8 @@ export interface ActivityRecord {
 
 export interface ActivityFile {
   records: ActivityRecord[];
-  session?: { startTime?: string; totalElapsedTimeSec?: number };
+  /** FIT's `session` message: the whole Activity's totals (not a Session). */
+  summary?: { startTime?: string; totalElapsedTimeSec?: number };
   laps: { startTime?: string; totalElapsedTimeSec?: number; totalDistanceM?: number }[];
 }
 
@@ -43,36 +45,35 @@ export async function parseActivityFile(bytes: ArrayBuffer): Promise<ActivityFil
     throw apiChanged(ACTIVITY_FILE, "a valid FIT file (parsing failed)");
   }
 
-  const firstMs = fit.records?.[0]?.timestamp ? toMs(fit.records[0].timestamp) : 0;
-  const records = (fit.records ?? []).flatMap((record): ActivityRecord[] => {
-    if (record.timestamp == null) return [];
-    const ms = toMs(record.timestamp);
-    return [
-      dropUndefined({
-        sec: Math.round((ms - firstMs) / 1000),
-        timestamp: new Date(ms).toISOString(),
-        heartRate: record.heart_rate,
-        cadence: record.cadence,
-        speed: record.speed,
-        power: record.power,
-        altitude: record.altitude,
-        distance: record.distance,
-        positionLat: record.position_lat,
-        positionLong: record.position_long,
-      }),
-    ];
+  const timed = (fit.records ?? []).filter((record) => record.timestamp != null);
+  if (timed.length === 0) throw apiChanged(ACTIVITY_FILE, "records");
+  const firstMs = toMs(timed[0]!.timestamp!);
+  const records = timed.map((record): ActivityRecord => {
+    const ms = toMs(record.timestamp!);
+    return dropEmpty({
+      sec: Math.round((ms - firstMs) / 1000),
+      timestamp: new Date(ms).toISOString(),
+      heartRate: record.heart_rate,
+      cadence: record.cadence,
+      speed: record.speed,
+      power: record.power,
+      altitude: record.altitude,
+      distance: record.distance,
+      positionLat: record.position_lat,
+      positionLong: record.position_long,
+    });
   });
-  const session = fit.sessions?.[0];
+  const summary = fit.sessions?.[0];
   return {
     records,
-    ...(session && {
-      session: dropUndefined({
-        startTime: isoOrUndefined(session.start_time),
-        totalElapsedTimeSec: session.total_elapsed_time,
+    ...(summary && {
+      summary: dropEmpty({
+        startTime: isoOrUndefined(summary.start_time),
+        totalElapsedTimeSec: summary.total_elapsed_time,
       }),
     }),
     laps: (fit.laps ?? []).map((lap) =>
-      dropUndefined({
+      dropEmpty({
         startTime: isoOrUndefined(lap.start_time),
         totalElapsedTimeSec: lap.total_elapsed_time,
         totalDistanceM: lap.total_distance,
@@ -87,8 +88,4 @@ function toMs(value: Date | string | number): number {
 
 function isoOrUndefined(value: Date | string | number | undefined): string | undefined {
   return value == null ? undefined : new Date(value).toISOString();
-}
-
-function dropUndefined<T extends object>(value: T): T {
-  return Object.fromEntries(Object.entries(value).filter(([, v]) => v != null)) as T;
 }
