@@ -35,8 +35,8 @@ Likelihood and severity are rated low, medium or high, **after** the measures.
 
 | Risk | Measures | Residual |
 |---|---|---|
-| A KV dump exposes refresh tokens. | Each token is encrypted in the Grant's `props` with a per-Grant key wrapped by that Grant's own OAuth tokens. There is no server-side key: a KV dump alone reveals nothing. | Low |
-| The operator, or someone in their Cloudflare account, uses a rider's token in the background. | By construction the token can only be unwrapped while serving one of that rider's requests; there is no admin route. | Low |
+| A KV dump exposes refresh tokens. | Each token is encrypted in the Grant's `props`, with the email, by a per-Grant key wrapped by that Grant's own OAuth tokens. There is no server-side key: a KV dump reveals no token or email, only uids, client ids and dates. | Low |
+| The operator, or someone in their Cloudflare account, uses a rider's token in the background. | The deployed code can only unwrap a token while serving one of that rider's requests, and has no admin route. Getting at tokens otherwise takes deploying code that captures them, in a public repo with a deploy history. | Low |
 | A token leak is suspected. | The [token-leak runbook](../runbooks/token-leak.md): delete the namespace, redeploy, tell riders to change their Rouvy password (which revokes every Firebase refresh token), assess notification within 72 h. | Low |
 | Tokens are kept longer than needed. | Grants are deleted after 30 days idle; a password change ends them all; erasure on request ([kill one rider](../operations.md#kill-one-rider)). | Low |
 
@@ -50,11 +50,11 @@ Likelihood and severity are rated low, medium or high, **after** the measures.
 
 ## Law 25, s. 17: information leaving Québec
 
-The operator is in Québec. Riders' information is held by Cloudflare: the Durable Object that handles ride data in the EU, and the encrypted Grants in KV, globally.
+The operator is in Québec. Riders' information is held by Cloudflare: the Durable Object that handles ride data in the EU, the Worker front (sign-in, token checks) at the edge location nearest the rider, and the Grants in KV, globally.
 
 - **Sensitivity:** the refresh token gives read access to a rider's rides; ride data includes health data. Both are sensitive.
 - **Purpose:** only reading the rider's own rides for their client, at their request.
-- **Protection:** the measures above; Cloudflare as processor under its DPA, with its security certifications (ISO 27001, SOC 2); the token encrypted with no key held by anyone but the rider's client.
+- **Protection:** the measures above; Cloudflare as processor under its DPA, with its security certifications (ISO 27001, SOC 2); the token encrypted at rest with no key held by anyone but the rider's client.
 - **Legal regime where it goes:** the EU, under GDPR; elsewhere in Cloudflare's network, covered by its DPA and standard contractual clauses.
 
 **Conclusion:** the information will receive protection equivalent to that under Law 25. The transfer may go ahead, under the DPA.

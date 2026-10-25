@@ -46,7 +46,7 @@ export function signInPage({
 }: {
   details: ConsentDescription;
   /** Who runs this instance: the rider is about to hand them their Rouvy login. */
-  operator: string;
+  operator: Operator;
   handle: string;
   /** From `beginConsent`: they bind the form to this browser and forbid framing. */
   headers: Headers;
@@ -65,7 +65,7 @@ export function signInPage({
     "Sign in to Rouvy",
     `<h1>${client} wants to read your Rouvy rides</h1>
 <p>Access will be sent to <strong>${escape(details.redirectHost)}</strong>.</p>
-<p>Unofficial, not affiliated with Rouvy. Run by ${escape(operator)}.</p>
+<p>Unofficial, not affiliated with Rouvy. Run by ${escape(operator.name)}.</p>
 ${notice}
 <form method="post">
   <input type="hidden" name="handle" value="${escape(handle)}">
@@ -107,8 +107,8 @@ export function privacyPage(operator: Operator): Response {
 <p>One purpose only: reading your own Rouvy rides so that the MCP client you connected (claude.ai, for example) can answer your questions about them. To do that, the instance handles:</p>
 <ul>
   <li><strong>your Rouvy email and password</strong>, once, when you sign in. The password goes to Rouvy's sign-in service (Google Firebase) and is then discarded, never stored or logged;</li>
-  <li><strong>your Rouvy refresh token, account id and email</strong>, kept encrypted with each connection (Grant) so the instance can sign in to Rouvy for you while it answers your client;</li>
-  <li><strong>your ride data</strong>, read from Rouvy when your client asks: Activities, power, cadence, speed, and heart rate, which is health data. It is only passed on to your client.</li>
+  <li><strong>your Rouvy refresh token and email</strong>, kept encrypted with each connection (Grant), and your Rouvy account id, which labels it, so the instance can sign in to Rouvy for you while it answers your client;</li>
+  <li><strong>your ride data</strong>, read from Rouvy when your client asks: Activities with their power, cadence, speed and heart rate, and the rider settings Rouvy keeps with them (weight, FTP, zones). Heart rate, and arguably weight, are health data. It is only passed on to your client.</li>
 </ul>
 <h2>4. Legal basis</h2>
 <p>Your consent, GDPR Art. 6(1)(a), and for heart rate and other health data your explicit consent, Art. 9(2)(a). You give both with the two boxes on the sign-in page, every time you connect. You can withdraw them at any time by disconnecting (section 8); that doesn't affect what was done before.</p>
@@ -120,18 +120,18 @@ export function privacyPage(operator: Operator): Response {
 </ul>
 <p>Nothing is sold or shared with anyone else.</p>
 <h2>6. Where it's kept</h2>
-<p>The part of the instance that talks to Rouvy and holds your rides in memory runs in the European Union (a Cloudflare Durable Object in the EU jurisdiction). Connections are stored in Cloudflare's global key-value store, with your refresh token encrypted by a key only your client's tokens unlock. The operator, in Québec, can delete them but not read your token.</p>
+<p>The part of the instance that reads your rides from Rouvy and holds them in memory runs in the European Union (a Cloudflare Durable Object in the EU jurisdiction). The sign-in page, and the front that checks your client's tokens, run at whichever Cloudflare location is nearest you. Connections are stored in Cloudflare's global key-value store, with your refresh token and email encrypted by a key that only your client's tokens unlock. The operator, in Québec, can delete them but cannot read your token from storage.</p>
 <h2>7. How long it's kept</h2>
 <ul>
-  <li><strong>Connections (Grants)</strong>, with your encrypted refresh token, account id and email: deleted after 30 days without use.</li>
-  <li><strong>Logs</strong>: kept 7 days. They hold tool names, outcomes, durations and status codes; never your email, account id, IP address or tokens.</li>
+  <li><strong>Connections (Grants)</strong>, with your encrypted refresh token and email, and your account id: deleted after 30 days without use.</li>
+  <li><strong>Logs</strong>: kept 7 days. They hold tool names, outcomes, durations and status codes, and the sign-in library's error lines, which name apps, not riders. Never your email, account id, IP address or tokens.</li>
   <li><strong>Ride data and your Rouvy session</strong>: in memory only, dropped after 30 minutes idle. No ride data is stored.</li>
 </ul>
 <h2>8. Your rights, and how to disconnect</h2>
 <p>You have the right to access, correct and erase your data, to restrict or object to its processing, and to data portability. Withdrawing consent means disconnecting, in any of three ways:</p>
 <ul>
   <li><strong>remove the connector</strong> in your client: immediate if the client revokes its access, otherwise the connection is deleted after 30 days without use;</li>
-  <li><strong>change your Rouvy password</strong>, which ends every connection at once;</li>
+  <li><strong>change your Rouvy password</strong>, which stops every connection working within the hour; each is deleted the next time your client uses it, or after 30 days;</li>
   <li><strong>write to</strong> ${contact}: the operator removes you from the invite list and erases every connection of yours.</li>
 </ul>
 <h2>9. Complaints</h2>

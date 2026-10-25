@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { BlockSignal, LogEvent } from "../../src/hosted/log.js";
 import { createRidersHost, type GrantProps } from "../../src/hosted/riders.js";
+import type { Operator } from "../../src/hosted/pages.js";
 import { createWorker } from "../../src/hosted/worker.js";
 import type { Clock } from "../../src/rouvy/clock.js";
 import { fakeNetwork, json, type RecordedRequest } from "../fakes.js";
@@ -62,17 +63,18 @@ function refreshesAnySignIn(clock: Clock) {
   };
 }
 
+export const OPERATOR: Operator = { name: "Test Operator", contact: "privacy@operator.example" };
+
 /**
  * The Worker as deployed, in Node: the real OAuth provider over an in-memory KV, its Durable
  * Object binding answered by one in-process riders host, and a fake network behind both.
  */
-export const OPERATOR = { name: "Test Operator", contact: "privacy@operator.example" };
 
 export function hostedWorker({
   allowList,
   routes = {},
   operator = OPERATOR,
-}: { allowList?: string; routes?: Routes; operator?: { name: string; contact: string } } = {}) {
+}: { allowList?: string; routes?: Routes; operator?: Operator } = {}) {
   const clock = fakeClock();
   const allRoutes: Routes = { [REFRESH]: refreshesAnySignIn(clock), [AUTH_DATA]: rouvySessionOpened, ...routes };
   const network = fakeNetwork(allRoutes);

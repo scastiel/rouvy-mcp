@@ -273,7 +273,7 @@ describe("the privacy notice", () => {
       "No ride data is stored",
       "Commission d'accès à l'information",
       "24 hours",
-      "Art. 6",
+      "duties of its Art. 6",
     ]) {
       expect(html).toContain(fact);
     }

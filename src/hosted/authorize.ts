@@ -8,7 +8,7 @@ import { AuthError } from "../auth/errors.js";
 import { signInWithPassword } from "../auth/firebase.js";
 import { openRouvySession } from "../auth/rouvy-session.js";
 import type { Log } from "./log.js";
-import { errorPage, signInPage, type Problem } from "./pages.js";
+import { errorPage, signInPage, type Operator, type Problem } from "./pages.js";
 import type { GrantProps } from "./riders.js";
 
 export interface AuthorizeOptions {
@@ -19,7 +19,7 @@ export interface AuthorizeOptions {
   fetch: typeof globalThis.fetch;
   log: Log;
   /** Who runs this instance, named on the page above the password field. */
-  operator: string;
+  operator: Operator;
 }
 
 const INVITE_ONLY: Problem = { message: "This instance is invite-only.", inviteOnly: true };
@@ -90,7 +90,7 @@ export async function authorize(request: Request, { oauth, allowList, fetch, log
 
 async function showSignIn(
   oauth: OAuthHelpers,
-  operator: string,
+  operator: Operator,
   authRequest: AuthRequest,
   form?: { email: string; problem: Problem },
 ) {
