@@ -23,7 +23,8 @@ export function rouvyUnavailable(status?: number): RouvyError {
 }
 
 export function blockedByBotProtection(until: number): RouvyError {
-  const at = new Date(until).toISOString().slice(11, 16);
+  // Rounded up to the minute, so trying again at the time shown is never still blocked.
+  const at = new Date(Math.ceil(until / 60_000) * 60_000).toISOString().slice(11, 16);
   return new RouvyError(
     `Request blocked by Rouvy's bot protection. Try again after ${at} UTC; report it at ${ISSUES_URL} if it persists.`,
   );

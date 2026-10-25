@@ -39,7 +39,8 @@ export function createPushback(fetch: typeof globalThis.fetch, clock: Clock): ty
 
     let result = await attempt(input, init);
     // Only a GET is safe to send twice. Kept apart from the auth retry, which lives in the client.
-    if (result.unavailable && (init?.method ?? "GET").toUpperCase() === "GET") {
+    const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+    if (result.unavailable && method.toUpperCase() === "GET") {
       await clock.sleep(GET_RETRY_DELAY_MS);
       result = await attempt(input, init);
     }

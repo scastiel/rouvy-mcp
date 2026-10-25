@@ -37,7 +37,7 @@ async function riderWithList(list: (attempt: number) => Response | Promise<Respo
   });
   const client = await connect({ credentials: credentials.provider, fetch: network.fetch, clock });
   const listActivities = (offset = 0) => client.callTool({ name: "list_activities", arguments: { offset } });
-  const listRequests = () => network.requests.filter((r) => r.url.pathname.endsWith("activities-pagination.data"));
+  const listRequests = () => network.requests.filter((r) => r.url.host + r.url.pathname === LIST);
   return { clock, network, listActivities, listRequests, listTimes };
 }
 
@@ -49,8 +49,9 @@ describe("Rouvy pushing back", () => {
 
     expect(blocked.isError).toBe(true);
     expect(text(blocked)).toMatch(/blocked by Rouvy's bot protection/);
-    // The fake clock starts at 08:00 UTC.
-    expect(text(blocked)).toMatch(/try again after 08:15 UTC/i);
+    // The fake clock starts at 08:00 UTC; the block lands a few spaced requests later, so the
+    // cool-down ends at 08:15:0x, shown rounded up.
+    expect(text(blocked)).toMatch(/try again after 08:16 UTC/i);
     expect(text(blocked)).not.toMatch(/SECRET-BODY|Attention Required/);
     expect(rider.listRequests()).toHaveLength(1);
 
