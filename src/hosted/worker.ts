@@ -128,7 +128,7 @@ export function createWorker({
         provider = { publicUrl: env.PUBLIC_URL, instance: createProvider(env.PUBLIC_URL, fetch, log) };
       }
       if (!atTokenEndpoint(request)) return provider.instance.fetch(request, env, ctx);
-      return revoke(request, (forwarded) => provider!.instance.fetch(forwarded, env, ctx), log);
+      return logClientRevocation(request, (forwarded) => provider!.instance.fetch(forwarded, env, ctx), log);
     },
   } satisfies ExportedHandler<Env>;
 }
@@ -139,8 +139,8 @@ function atTokenEndpoint(request: Request): boolean {
   return request.method === "POST" && pathname === "/token";
 }
 
-/** Lets the provider revoke, then records it: the provider has no hook for it. */
-async function revoke(request: Request, forward: (request: Request) => Promise<Response>, log: Log): Promise<Response> {
+/** Lets the provider answer, then records a revocation it accepted: the provider has no hook for it. */
+async function logClientRevocation(request: Request, forward: (request: Request) => Promise<Response>, log: Log): Promise<Response> {
   const form = await request
     .clone()
     .formData()

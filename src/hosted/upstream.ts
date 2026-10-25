@@ -31,7 +31,7 @@ export function observeUpstream(fetch: typeof globalThis.fetch, { log, onBlockSi
     log({ event: "upstream", service, status: response.status });
     if (service === "rouvy" && (response.headers.get("cf-mitigated") === "challenge" || (await isCloudflareBlock(response)))) {
       blockSignal("cloudflare");
-    } else if (isAuthData(url) && !opensSession(response)) {
+    } else if (isAuthData(url) && answered(response) && !opensSession(response)) {
       // Only ever sent with an idToken Firebase has just handed over.
       blockSignal("auth_data_refused");
     }
@@ -48,6 +48,11 @@ function upstreamOf({ hostname }: URL): Upstream | undefined {
 
 function isAuthData({ hostname, pathname }: URL): boolean {
   return hostname === "account.rouvy.com" && pathname === "/resources/auth.data";
+}
+
+/** Rouvy took the request and answered it: not an outage, nor a rate limit (both are normal politeness). */
+function answered({ status }: Response): boolean {
+  return status < 500 && status !== 429;
 }
 
 function opensSession(response: Response): boolean {

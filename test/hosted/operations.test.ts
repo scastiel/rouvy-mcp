@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LogEvent } from "../../src/hosted/log.js";
-import { canaryRoutes, firebaseError, json } from "../fakes.js";
+import { canaryRoutes, firebaseError, json, type RecordedRequest } from "../fakes.js";
 import { activityRow, AUTH_DATA, detail, fakeIdToken, LIST, listPage, REFRESH, ROUTE_ACTIVITY } from "../server-harness.js";
 import {
   CLIENT_IP,
@@ -59,6 +59,10 @@ const health = async (worker: HostedWorker) => {
   const response = await worker.fetch("/health");
   return { status: response.status, body: (await response.json()) as Record<string, any> };
 };
+
+/** Firebase signing the rider in, and still refusing the canary's made-up credentials. */
+const riderSignIn = (request: RecordedRequest) =>
+  JSON.parse(request.body).email === RIDER ? signedIn("uid-1", RIDER)() : canaryRoutes()[SIGN_IN]!(request);
 
 /** The canary's requests: three to Rouvy, one to Firebase. */
 const canaryRequests = (worker: HostedWorker) => worker.network.requests.filter((r) => !r.url.host.startsWith("securetoken"));
@@ -257,6 +261,19 @@ describe("the operations log", () => {
     expect(worker.events()).toContainEqual({ event: "block_signal", kind: "auth_data_refused" });
   });
 
+  it.each([
+    ["is down", () => new Response(null, { status: 503 })],
+    ["rate limits", () => new Response(null, { status: 429 })],
+  ])("doesn't take auth.data failing when Rouvy %s for a block", async (_, failure) => {
+    const worker = workerWithRider();
+    const tokens = await connect(worker, RIDER);
+    worker.network.routes[AUTH_DATA] = failure;
+
+    await listActivities(worker, tokens.accessToken);
+
+    expect(worker.events().filter((e) => e.event === "block_signal")).toEqual([]);
+  });
+
   it("doesn't take Rouvy's own 403, with no Cloudflare page, for a block", async () => {
     const worker = workerWithRider({ [LIST]: () => new Response(null, { status: 403 }) });
     const tokens = await connect(worker, RIDER);
@@ -327,7 +344,7 @@ describe("GET /health", () => {
   });
 
   it("reports the hard block signals of the last 24 h, from tool calls and the sign-in page", async () => {
-    const worker = workerForHealth({ [SIGN_IN]: signedIn("uid-1", RIDER), [detail(ROUTE_ACTIVITY)]: cloudflareBlock });
+    const worker = workerForHealth({ [SIGN_IN]: riderSignIn, [detail(ROUTE_ACTIVITY)]: cloudflareBlock });
     const tokens = await connect(worker, RIDER);
     await mcpRequest(worker, tokens.accessToken, "tools/call", { name: "get_activity", arguments: { activity_id: ROUTE_ACTIVITY } });
     worker.network.routes[AUTH_DATA] = authDataRefused;
@@ -340,7 +357,7 @@ describe("GET /health", () => {
   });
 
   it("forgets block signals after 24 h", async () => {
-    const worker = workerForHealth({ [AUTH_DATA]: authDataRefused, [SIGN_IN]: signedIn("uid-1", RIDER) });
+    const worker = workerForHealth({ [AUTH_DATA]: authDataRefused, [SIGN_IN]: riderSignIn });
     const signIn = await openSignIn(worker, await registerClient(worker));
     await submitSignIn(worker, signIn, { email: RIDER, password: "correct horse", ...CONSENTED });
 
@@ -350,18 +367,34 @@ describe("GET /health", () => {
     expect(body.blockSignals).toEqual({ cloudflare: 0, auth_data_refused: 0, persisting: false });
   });
 
-  it("fails when hard block signals have persisted for over an hour: that's a block", async () => {
-    const worker = workerForHealth({ [AUTH_DATA]: authDataRefused, [SIGN_IN]: signedIn("uid-1", RIDER) });
+  it("doesn't call isolated block signals hours apart persisting", async () => {
+    const worker = workerForHealth({ [AUTH_DATA]: authDataRefused, [SIGN_IN]: riderSignIn });
     for (let attempt = 0; attempt < 2; attempt++) {
       const signIn = await openSignIn(worker, await registerClient(worker));
       await submitSignIn(worker, signIn, { email: RIDER, password: "correct horse", ...CONSENTED });
-      worker.clock.advance(HOUR_MS + 1);
+      worker.clock.advance(3 * HOUR_MS);
+    }
+
+    const { status, body } = await health(worker);
+
+    expect(status).toBe(200);
+    expect(body.blockSignals).toEqual({ cloudflare: 0, auth_data_refused: 2, persisting: false });
+  });
+
+  it("fails when hard block signals have persisted for over an hour: that's a block", async () => {
+    const worker = workerForHealth({ [AUTH_DATA]: authDataRefused, [SIGN_IN]: riderSignIn });
+    // Refused every 30 minutes, for an hour and a half.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const signIn = await openSignIn(worker, await registerClient(worker));
+      await submitSignIn(worker, signIn, { email: RIDER, password: "correct horse", ...CONSENTED });
+      worker.clock.advance(30 * 60_000);
     }
 
     const { status, body } = await health(worker);
 
     expect(status).toBe(503);
     expect(body.ok).toBe(false);
-    expect(body.blockSignals).toEqual({ cloudflare: 0, auth_data_refused: 2, persisting: true });
+    expect(body.checks.every((check: { ok: boolean }) => check.ok)).toBe(true);
+    expect(body.blockSignals).toEqual({ cloudflare: 0, auth_data_refused: 4, persisting: true });
   });
 });

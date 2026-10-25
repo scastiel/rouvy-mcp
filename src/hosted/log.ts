@@ -1,3 +1,4 @@
+import type { CoolDown } from "../rouvy/pushback.js";
 import type { ToolOutcome } from "../server.js";
 
 /**
@@ -11,7 +12,7 @@ export type LogEvent =
   /** Rouvy or Firebase answered: the status only, never the URL (it can hold an Activity id) or the body. */
   | { event: "upstream"; service: Upstream; status: number | "network_error" }
   /** Rouvy pushed back, so nothing goes out for a while. */
-  | { event: "cool_down"; reason: "rate_limited" | "blocked"; seconds: number }
+  | { event: "cool_down"; reason: CoolDown["reason"]; seconds: number }
   | { event: "block_signal"; kind: BlockSignal }
   | { event: "grant_created" }
   /** `client`: the client revoked its token. `terminal_auth_failure`: Firebase ended the rider's login. */

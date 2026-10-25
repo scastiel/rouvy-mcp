@@ -63,6 +63,28 @@ export interface Health {
 /** Rouvy sees the `/health` checks at most this often (spec-m2 §9). */
 const HEALTH_TTL_MS = 60 * 60_000;
 const HEALTH_KEY = "health";
+/** Hard block signals persisting this long mean a block (spec-m2 §9). */
+const BLOCK_PERSISTS_MS = 60 * 60_000;
+
+/** The last canary run, kept in storage. */
+interface CachedChecks {
+  at: number;
+  checks: CanaryCheck[];
+}
+
+/**
+ * Whether signals kept coming for over an hour: some run of them, each within an hour of the
+ * previous one, spans more than that. Isolated signals hours apart aren't a block.
+ */
+function persisting(signals: { at: number }[]): boolean {
+  let runStart: number | undefined;
+  for (let i = 0; i < signals.length; i++) {
+    const { at } = signals[i]!;
+    if (i === 0 || at - signals[i - 1]!.at > BLOCK_PERSISTS_MS) runStart = at;
+    if (at - runStart! > BLOCK_PERSISTS_MS) return true;
+  }
+  return false;
+}
 
 /** Nothing on the hosted server mentions the stdio login command: the rider reconnects in their client. */
 function notLoggedInMessage(terminal: boolean): string {
@@ -152,11 +174,11 @@ export function createRidersHost({
     return instance;
   }
 
-  let checking: Promise<{ at: number; checks: CanaryCheck[] }> | undefined;
+  let checking: Promise<CachedChecks> | undefined;
 
   /** M1's canary, from this egress, cached in storage so an eviction doesn't send it again. */
   async function canaryChecks() {
-    const cached = await store.get<{ at: number; checks: CanaryCheck[] }>(HEALTH_KEY);
+    const cached = await store.get<CachedChecks>(HEALTH_KEY);
     if (cached && clock.now() - cached.at < HEALTH_TTL_MS) return cached;
     checking ??= (async () => {
       try {
@@ -175,13 +197,13 @@ export function createRidersHost({
     async health() {
       const { at, checks } = await canaryChecks();
       const signals = await blockSignals.lastDay();
-      const persisting = signals.length > 0 && signals[signals.length - 1]!.at - signals[0]!.at > HEALTH_TTL_MS;
+      const blocked = persisting(signals);
       const count = (kind: BlockSignal) => signals.filter((signal) => signal.kind === kind).length;
       return {
-        ok: checks.every((check) => check.ok) && !persisting,
+        ok: checks.every((check) => check.ok) && !blocked,
         checkedAt: new Date(at).toISOString(),
         checks,
-        blockSignals: { cloudflare: count("cloudflare"), auth_data_refused: count("auth_data_refused"), persisting },
+        blockSignals: { cloudflare: count("cloudflare"), auth_data_refused: count("auth_data_refused"), persisting: blocked },
       };
     },
     serve(request, props) {

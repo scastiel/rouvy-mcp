@@ -1,10 +1,11 @@
 // The Worker side of the daily canary (docs/spec-m2.md §9): asks the Public instance's /health,
 // which runs the same account-free checks from the Worker's own egress and counts the hard block
 // signals. Writes a Markdown report to HEALTH_REPORT, in the canary's format, for the drift issue,
-// and exits 1 when anything fails.
+// and exits 1 when anything fails. On GitHub, also sets the step output `persisting`, so the
+// issue can call it a block even when the GitHub side fails too.
 //
 //   HEALTH_URL=https://example.workers.dev/health node scripts/check-health.mjs
-import { writeFile } from "node:fs/promises";
+import { appendFile, writeFile } from "node:fs/promises";
 
 const url = process.env.HEALTH_URL;
 if (!url) {
@@ -15,6 +16,7 @@ if (!url) {
 const lines = [];
 const line = (ok, name, detail) => lines.push(`- ${ok ? "✅" : "❌"} **Worker: ${name}**: ${detail}`);
 let ok = false;
+let persisting = false;
 
 try {
   const response = await fetch(url, { headers: { accept: "application/json" } });
@@ -23,7 +25,8 @@ try {
     line(false, "/health", `HTTP ${response.status}, not a health report`);
   } else {
     for (const check of health.checks) line(check.ok, check.name, check.detail);
-    const { cloudflare, auth_data_refused: authDataRefused, persisting } = health.blockSignals;
+    const { cloudflare, auth_data_refused: authDataRefused } = health.blockSignals;
+    persisting = health.blockSignals.persisting === true;
     const spread = persisting ? "over more than an hour: a block" : "not persisting";
     line(!persisting, "hard block signals in the last 24 h", `${cloudflare} Cloudflare, ${authDataRefused} auth.data refused, ${spread}`);
     ok = response.ok && health.ok === true;
@@ -35,4 +38,5 @@ try {
 const report = lines.join("\n");
 console.log(report);
 if (process.env.HEALTH_REPORT) await writeFile(process.env.HEALTH_REPORT, report + "\n");
+if (process.env.GITHUB_OUTPUT) await appendFile(process.env.GITHUB_OUTPUT, `persisting=${persisting}\n`);
 process.exit(ok ? 0 : 1);

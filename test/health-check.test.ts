@@ -29,24 +29,29 @@ async function fakeHealth(status: number, body: unknown): Promise<string> {
   return `http://127.0.0.1:${(server.address() as AddressInfo).port}/health`;
 }
 
-/** Runs the workflow's step as the workflow does: its exit code, and the report it leaves for the issue. */
+/**
+ * Runs the workflow's step as the workflow does: its exit code, the report it leaves for the
+ * issue, and the step outputs the issue's verdict reads.
+ */
 async function checkHealth(url: string) {
-  const report = join(await mkdtemp(join(tmpdir(), "health-")), "report.md");
+  const dir = await mkdtemp(join(tmpdir(), "health-"));
+  const report = join(dir, "report.md");
+  const outputs = join(dir, "outputs");
+  const env = { ...process.env, HEALTH_URL: url, HEALTH_REPORT: report, GITHUB_OUTPUT: outputs };
   const exitCode = await new Promise<number>((resolve) => {
-    execFile(process.execPath, [SCRIPT], { env: { ...process.env, HEALTH_URL: url, HEALTH_REPORT: report } }, (error) =>
-      resolve(error ? Number(error.code ?? 1) : 0),
-    );
+    execFile(process.execPath, [SCRIPT], { env }, (error) => resolve(error ? Number(error.code ?? 1) : 0));
   });
-  return { exitCode, report: await readFile(report, "utf8") };
+  return { exitCode, report: await readFile(report, "utf8"), outputs: await readFile(outputs, "utf8").catch(() => "") };
 }
 
 describe("the canary workflow's /health check", () => {
   it("passes when every Worker-side check passes and no block persists", async () => {
     const url = await fakeHealth(200, { ok: true, checks: PASSING_CHECKS, blockSignals: NO_SIGNALS });
 
-    const { exitCode, report } = await checkHealth(url);
+    const { exitCode, report, outputs } = await checkHealth(url);
 
     expect(exitCode).toBe(0);
+    expect(outputs).toContain("persisting=false");
     expect(report).toContain("✅ **Worker: anonymous GET of the Activity list**: 202, redirect to sign-in");
   });
 
@@ -64,9 +69,10 @@ describe("the canary workflow's /health check", () => {
     const blockSignals = { cloudflare: 3, auth_data_refused: 0, persisting: true };
     const url = await fakeHealth(503, { ok: false, checks: PASSING_CHECKS, blockSignals });
 
-    const { exitCode, report } = await checkHealth(url);
+    const { exitCode, report, outputs } = await checkHealth(url);
 
     expect(exitCode).toBe(1);
+    expect(outputs).toContain("persisting=true");
     expect(report).toMatch(/❌ \*\*Worker: hard block signals in the last 24 h\*\*: 3 Cloudflare, 0 auth\.data refused, over more than an hour/);
   });
 

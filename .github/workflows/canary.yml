@@ -41,6 +41,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_SIDE: ${{ steps.canary.outcome }}
           WORKER_SIDE: ${{ steps.health.outcome }}
+          BLOCK_PERSISTING: ${{ steps.health.outputs.persisting }}
           CANARY_REPORT: ${{ runner.temp }}/canary-report.md
           HEALTH_REPORT: ${{ runner.temp }}/health-report.md
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -48,7 +49,9 @@ jobs:
           title="Rouvy drift canary failed"
           runbooks="${{ github.server_url }}/${{ github.repository }}/blob/main/docs/runbooks"
           # The block-or-drift rule (docs/runbooks/hard-stop.md).
-          if [ "$GITHUB_SIDE" = success ] && [ "$WORKER_SIDE" = failure ]; then
+          if [ "$BLOCK_PERSISTING" = true ]; then
+            verdict="**Hard block signals have persisted for over an hour: treat it as a block and [Hard stop]($runbooks/hard-stop.md).**"
+          elif [ "$GITHUB_SIDE" = success ] && [ "$WORKER_SIDE" = failure ]; then
             verdict="**Only the Worker side fails: treat it as a block and [Hard stop]($runbooks/hard-stop.md).**"
           elif [ "$WORKER_SIDE" = failure ]; then
             verdict="Both sides fail: Rouvy probably changed something rouvy-mcp relies on (drift). Fix it as in M1; the Public instance stays up meanwhile."
