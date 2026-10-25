@@ -29,3 +29,9 @@ _Avoid_: Ride-time settings, historical settings
 **Session**:
 A logged-in connection to Rouvy on the rider's behalf. Never a ride.
 _Avoid_: Login (for the connection itself)
+
+### Hosting
+
+**Public instance**:
+The hosted rouvy-mcp server the maintainer runs for invited riders, as opposed to one a rider hosts for themselves.
+_Avoid_: The service, SaaS
