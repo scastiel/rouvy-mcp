@@ -288,7 +288,7 @@ Not legal advice. Verdict: **amber** for an invite-only, free, small, honest Pub
 **Pages the Worker serves:**
 
 - **`/privacy`: the Art. 13 notice.** Sections:
-  1. the controller and a contact address used only for this instance;
+  1. the controller and a contact address, both from the `OPERATOR_NAME` and `OPERATOR_CONTACT` vars, so every self-host names its own operator. The Public instance uses the maintainer's own address, not a dedicated one;
   2. the person in charge under Law 25;
   3. the purpose: reading your own rides for your MCP client;
   4. the legal basis: Art. 6(1)(a) consent plus Art. 9(2)(a) explicit consent;
@@ -300,7 +300,7 @@ Not legal advice. Verdict: **amber** for an invite-only, free, small, honest Pub
   10. no automated decisions;
   11. the Hard stop;
   12. the Data Act line (below).
-- **`/authorize`:** the two checkbox texts and the "unofficial" line (§5).
+- **`/authorize`:** the two checkbox texts and the "unofficial" line (§5), which also names the operator.
 - **No terms-of-service page.**
 
 **Paperwork before the beta:**
@@ -351,6 +351,7 @@ A **"Self-host on Cloudflare"** README section, best effort: the same code as th
 - creating the KV namespace, with the Durable Object in the EU jurisdiction;
 - the `nodejs_compat` and `global_fetch_strictly_public` flags;
 - the allow-list secret (`wrangler secret put`);
+- the operator's name and contact address (`OPERATOR_NAME`, `OPERATOR_CONTACT`), shown on `/privacy`;
 - a URL, on workers.dev or a custom domain, that must **never change once riders have connected**;
 - the kill-one-rider and Hard stop commands (§6, §9).
 

@@ -24,6 +24,11 @@ describe("the hosting recipe (docs/spec-m2.md §3, §11)", () => {
   const publicUrl = String(config.vars.PUBLIC_URL);
   const { hostname: publicHost, origin, protocol } = new URL(publicUrl);
 
+  it("names the operator and a contact address for the privacy notice (spec-m2 §10)", () => {
+    expect(String(config.vars.OPERATOR_NAME ?? "").trim()).not.toBe("");
+    expect(String(config.vars.OPERATOR_CONTACT ?? "")).toMatch(/^[^\s@<>"]+@[^\s@<>"]+\.[a-z]{2,}$/i);
+  });
+
   it("turns on nodejs_compat, and global_fetch_strictly_public, which CIMD needs", () => {
     expect(config.compatibility_flags).toEqual(expect.arrayContaining(["nodejs_compat", "global_fetch_strictly_public"]));
   });

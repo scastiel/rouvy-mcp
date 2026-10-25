@@ -66,7 +66,13 @@ function refreshesAnySignIn(clock: Clock) {
  * The Worker as deployed, in Node: the real OAuth provider over an in-memory KV, its Durable
  * Object binding answered by one in-process riders host, and a fake network behind both.
  */
-export function hostedWorker({ allowList, routes = {} }: { allowList?: string; routes?: Routes } = {}) {
+export const OPERATOR = { name: "Test Operator", contact: "privacy@operator.example" };
+
+export function hostedWorker({
+  allowList,
+  routes = {},
+  operator = OPERATOR,
+}: { allowList?: string; routes?: Routes; operator?: { name: string; contact: string } } = {}) {
   const clock = fakeClock();
   const allRoutes: Routes = { [REFRESH]: refreshesAnySignIn(clock), [AUTH_DATA]: rouvySessionOpened, ...routes };
   const network = fakeNetwork(allRoutes);
@@ -94,6 +100,8 @@ export function hostedWorker({ allowList, routes = {} }: { allowList?: string; r
     OAUTH_KV: kv,
     PUBLIC_URL: ORIGIN,
     ALLOW_LIST: allowList,
+    OPERATOR_NAME: operator.name,
+    OPERATOR_CONTACT: operator.contact,
     RIDERS: {
       jurisdiction(name: string) {
         jurisdictions.push(name);
