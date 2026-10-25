@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { createNodeTerminal } from "./cli/node-terminal.js";
 import { runCli } from "./cli/run.js";
 import { createFileCredentialsProvider, defaultCredentialsPath } from "./credentials/file.js";
@@ -13,11 +13,10 @@ const args = process.argv.slice(2);
 
 if (args.length === 0) {
   // MCP over stdio: stdout belongs to the protocol, so nothing else may print there.
-  const server = createServer({
-    credentials: createFileCredentialsProvider(credentialsPath),
-    storage: exportStorage(process.env.ROUVY_MCP_EXPORT_DIR),
-  });
-  await server.connect(new StdioServerTransport());
+  // serveStdio answers both protocol eras: server/discover (2026-07-28) and the legacy initialize.
+  const credentials = createFileCredentialsProvider(credentialsPath);
+  const storage = exportStorage(process.env.ROUVY_MCP_EXPORT_DIR);
+  serveStdio(() => createServer({ credentials, storage }));
 } else {
   process.exitCode = await runCli(args, {
     fetch: globalThis.fetch,

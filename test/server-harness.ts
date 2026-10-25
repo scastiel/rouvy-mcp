@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
 import { FitBaseType, FitEncoder } from "fit-file-parser";
 import { decode, encode } from "turbo-stream";
 import type { Clock } from "../src/rouvy/clock.js";

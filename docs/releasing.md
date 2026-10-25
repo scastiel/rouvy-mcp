@@ -18,6 +18,16 @@ Releases are `0.x` semver, published by [`.github/workflows/release.yml`](../.gi
 4. Watch the **Release** workflow. It refuses a tag that doesn't match `package.json`, runs typecheck, build and tests, publishes, then creates the GitHub release with generated notes.
 5. Check: `npm view rouvy-mcp version` shows the new version, and the npm page shows the provenance badge.
 
+## After an MCP SDK bump
+
+Tests talk to the server over the SDK's in-memory pair and send raw `server/discover` and `initialize` to the built bin, but no real client. Before tagging, check the bin from the branch in both clients:
+
+1. `npm run build`, then point each client at the build instead of npm: `"command": "node", "args": ["/absolute/path/to/rouvy-mcp/dist/bin.js"]` in Claude Desktop's `claude_desktop_config.json`, and `claude mcp add rouvy-local -- node /absolute/path/to/rouvy-mcp/dist/bin.js` in Claude Code.
+2. Restart the client: the server shows as connected, with its tools listed (`/mcp` in Claude Code).
+3. Ask for each tool in turn: your last Activities (`list_activities`), that Activity's summary (`get_activity`), its 5-minute splits (`get_activity_intervals`), stats from minute 10 to 20 (`get_window_stats`), its power and heart rate as a chart (`get_activity_streams`), and, with `ROUVY_MCP_EXPORT_DIR` set, an export to CSV (`export_activity_file`).
+4. Run `npx -y rouvy-mcp logout` (or point `XDG_CONFIG_HOME` at an empty folder), ask again: the answer is the *Not logged in* message naming `npx -y rouvy-mcp login`.
+5. Put the clients back on `rouvy-mcp@latest`.
+
 ## First release only (0.1.0)
 
 These need the maintainer: npm account, repo admin. In this order, because provenance only works from a public repo, and npm only lets you configure a trusted publisher for a package that already exists.
