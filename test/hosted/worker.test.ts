@@ -62,6 +62,18 @@ describe("the sign-in page", () => {
     const response = await submitSignIn(worker, signIn, { email: "stranger@example.com", password: "a guess" });
 
     expect(response.status).toBe(200);
+    const html = await response.text();
+    expect(html).toContain("This instance is invite-only");
+    expect(html).toContain("#self-host-on-cloudflare");
+    expect(worker.network.requests).toHaveLength(0);
+  });
+
+  it("is invite-only for everyone while the allow-list secret isn't set", async () => {
+    const worker = hostedWorker({ routes: { [SIGN_IN]: signedIn("uid-1", "rider@example.com") } });
+    const signIn = await openSignIn(worker, await registerClient(worker));
+
+    const response = await submitSignIn(worker, signIn, { email: "rider@example.com", password: "pw" });
+
     expect(await response.text()).toContain("This instance is invite-only");
     expect(worker.network.requests).toHaveLength(0);
   });
@@ -219,14 +231,40 @@ describe("an allow-listed rider", () => {
     expect(responses.map((r) => r.status)).toEqual([200, 200]);
     const sent = worker.network.requests.slice(signInRequests);
     // Each rider renewed their own Session from their own Grant, then listed with its cookie.
-    expect(sent.filter((r) => r.url.host === "securetoken.googleapis.com").map((r) => r.body)).toEqual([
-      expect.stringContaining("refresh-for-uid-1"),
-      expect.stringContaining("refresh-for-uid-2"),
-    ]);
+    const renewals = sent.filter((r) => r.url.host === "securetoken.googleapis.com").map((r) => r.body);
+    expect(renewals).toHaveLength(2);
+    expect(renewals).toEqual(
+      expect.arrayContaining([expect.stringContaining("refresh-for-uid-1"), expect.stringContaining("refresh-for-uid-2")]),
+    );
     expect(sent.filter((r) => r.url.host === "riders.rouvy.com")).toHaveLength(2);
     // One queue: every request started at least 1 s after the previous one.
     const starts = worker.clockReadings.slice(-sent.length);
     for (let i = 1; i < starts.length; i++) expect(starts[i]! - starts[i - 1]!).toBeGreaterThanOrEqual(1_000);
+  });
+
+  it("keeps one live Session when connected from two clients (two Grants)", async () => {
+    const worker = workerWithRiders();
+    const tokens = [await connectRider(worker, RIDER), await connectRider(worker, RIDER)];
+    const signInRequests = worker.network.requests.length;
+
+    for (const token of [...tokens, ...tokens]) {
+      const response = await mcpRequest(worker, token, "tools/call", { name: "list_activities", arguments: { limit: 1 } });
+      expect(JSON.stringify(await response.json())).toContain("a00");
+    }
+
+    const renewals = worker.network.requests.slice(signInRequests).filter((r) => r.url.host === "securetoken.googleapis.com");
+    expect(renewals).toHaveLength(1);
+  });
+
+  it("isn't offered export_activity_file: there's no export folder on the hosted server", async () => {
+    const worker = workerWithRiders();
+    const token = await connectRider(worker, RIDER);
+
+    const response = await mcpRequest(worker, token, "tools/list");
+    const names = ((await response.json()) as { result: { tools: { name: string }[] } }).result.tools.map((t) => t.name);
+
+    expect(names).toContain("list_activities");
+    expect(names).not.toContain("export_activity_file");
   });
 });
 

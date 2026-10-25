@@ -27,26 +27,33 @@ ${body}
   return new Response(html, { ...init, headers });
 }
 
+/** Why the sign-in didn't go through, shown above a fresh form. */
+export interface Problem {
+  message: string;
+  /** Not on the allow-list: the page points to self-hosting. */
+  inviteOnly?: boolean;
+}
+
 export function signInPage({
   details,
   handle,
   headers,
   email = "",
-  message,
+  problem,
 }: {
   details: ConsentDescription;
   handle: string;
   /** From `beginConsent`: they bind the form to this browser and forbid framing. */
   headers: Headers;
   email?: string;
-  message?: string;
+  problem?: Problem;
 }): Response {
   const client = details.clientDomain
     ? `${escape(details.clientName)} (${escape(details.clientDomain)})`
     : escape(details.clientName);
-  const notice = message
-    ? `<p class="message" role="alert">${escape(message)}${
-        message.includes("invite-only") ? ` You can <a href="${SELF_HOST_URL}">host your own</a>.` : ""
+  const notice = problem
+    ? `<p class="message" role="alert">${escape(problem.message)}${
+        problem.inviteOnly ? ` You can <a href="${SELF_HOST_URL}">host your own</a>.` : ""
       }</p>`
     : "";
   return page(

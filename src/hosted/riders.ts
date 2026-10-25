@@ -29,26 +29,38 @@ function notLoggedInMessage(terminal: boolean): string {
  */
 export function createRidersHost({ fetch, clock = systemClock }: { fetch: typeof globalThis.fetch; clock?: Clock }): RidersHost {
   const politeFetch = createPoliteFetch(fetch, clock);
-  const riders = new Map<string, { rider: Rider; grantToken: string; credentials: Credentials }>();
+  const riders = new Map<string, { rider: Rider; update(props: GrantProps): void }>();
 
+  /**
+   * One Rider per uid, however many Grants (clients) the rider has: its live Session is reused
+   * and renewed only when missing or near expiry (spec-m2 §6). `load()` returns the latest
+   * Grant's refresh token, unless Firebase rotated it since, which only lives here.
+   */
   function riderFor(props: GrantProps): Rider {
     let entry = riders.get(props.uid);
-    // A Grant's refresh token never changes; Firebase's rotations only live here (spec-m2 §6). A
-    // different one in props means a new sign-in, which wins.
-    if (!entry || entry.grantToken !== props.refreshToken) {
-      const credentials: Credentials = { refreshToken: props.refreshToken, uid: props.uid, email: props.email };
-      const next = { grantToken: props.refreshToken, credentials, rider: undefined as unknown as Rider };
-      next.rider = createRider({
+    if (!entry) {
+      let grantToken = props.refreshToken;
+      let credentials: Credentials = { refreshToken: props.refreshToken, uid: props.uid, email: props.email };
+      const rider = createRider({
         credentials: {
-          load: async () => next.credentials,
-          save: async (rotated) => void (next.credentials = rotated),
+          load: async () => credentials,
+          save: async (rotated) => void (credentials = rotated),
         },
         politeFetch,
         clock,
       });
-      riders.set(props.uid, next);
-      entry = next;
+      entry = {
+        rider,
+        update(latest) {
+          // A Grant's refresh token never changes: a different one is another Grant, now the latest.
+          if (latest.refreshToken === grantToken) return;
+          grantToken = latest.refreshToken;
+          credentials = { refreshToken: latest.refreshToken, uid: latest.uid, email: latest.email };
+        },
+      };
+      riders.set(props.uid, entry);
     }
+    entry.update(props);
     return entry.rider;
   }
 

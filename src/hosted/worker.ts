@@ -10,8 +10,8 @@ export interface Env {
   RIDERS: DurableObjectNamespace<Riders>;
   /** This deployment's origin, e.g. `https://mcp.example.com`. Its `/mcp` is the OAuth audience: never change it once riders have connected. */
   PUBLIC_URL: string;
-  /** The riders' Rouvy emails, separated by commas or whitespace (a Worker secret). */
-  ALLOW_LIST: string;
+  /** The riders' Rouvy emails, separated by commas or whitespace (a Worker secret). Unset: nobody. */
+  ALLOW_LIST?: string;
   /** Set by the provider before it calls our handlers. */
   OAUTH_PROVIDER?: OAuthHelpers;
 }

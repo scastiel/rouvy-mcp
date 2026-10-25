@@ -7,18 +7,18 @@ import {
 import { AuthError } from "../auth/errors.js";
 import { signInWithPassword } from "../auth/firebase.js";
 import { openRouvySession } from "../auth/rouvy-session.js";
-import { errorPage, signInPage } from "./pages.js";
+import { errorPage, signInPage, type Problem } from "./pages.js";
 import type { GrantProps } from "./riders.js";
 
 export interface AuthorizeOptions {
   oauth: OAuthHelpers;
   /** The `ALLOW_LIST` secret: emails separated by commas or whitespace. */
-  allowList: string;
+  allowList: string | undefined;
   /** Already carries the honest user agent. */
   fetch: typeof globalThis.fetch;
 }
 
-const INVITE_ONLY = "This instance is invite-only.";
+const INVITE_ONLY: Problem = { message: "This instance is invite-only.", inviteOnly: true };
 
 /**
  * The sign-in page (spec-m2 §5): Rouvy email and password, checked against the allow-list before
@@ -36,8 +36,8 @@ export async function authorize(request: Request, { oauth, allowList, fetch }: A
     const approved = await oauth.approveConsent(request, String(form.get("handle") ?? ""));
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
-    const retry = async (message: string) => {
-      const response = await showSignIn(oauth, approved.request, { email, message });
+    const retry = async (problem: Problem) => {
+      const response = await showSignIn(oauth, approved.request, { email, problem });
       for (const cookie of approved.headers.getSetCookie()) response.headers.append("set-cookie", cookie);
       return response;
     };
@@ -53,7 +53,7 @@ export async function authorize(request: Request, { oauth, allowList, fetch }: A
       await openRouvySession(fetch, tokens);
       props = { refreshToken: tokens.refreshToken, uid: tokens.uid, email: tokens.email };
     } catch (error) {
-      return await retry(error instanceof AuthError ? error.message : "Couldn't reach Rouvy. Try again later.");
+      return await retry({ message: error instanceof AuthError ? error.message : "Couldn't reach Rouvy. Try again later." });
     }
 
     const { redirectTo } = await oauth.completeAuthorization({
@@ -74,13 +74,13 @@ export async function authorize(request: Request, { oauth, allowList, fetch }: A
   }
 }
 
-async function showSignIn(oauth: OAuthHelpers, authRequest: AuthRequest, form?: { email: string; message: string }) {
+async function showSignIn(oauth: OAuthHelpers, authRequest: AuthRequest, form?: { email: string; problem: Problem }) {
   const details = await oauth.describeConsent(authRequest); // first: a failed lookup leaves nothing in KV
   const consent = await oauth.beginConsent(authRequest);
   return signInPage({ details, handle: consent.handle, headers: consent.headers, ...form });
 }
 
-function parseAllowList(secret: string): Set<string> {
+function parseAllowList(secret = ""): Set<string> {
   return new Set(
     secret
       .split(/[\s,]+/)

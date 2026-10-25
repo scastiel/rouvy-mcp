@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createRidersHost, type GrantProps } from "../../src/hosted/riders.js";
 import { createWorker } from "../../src/hosted/worker.js";
-import { fakeNetwork, json } from "../fakes.js";
+import type { Clock } from "../../src/rouvy/clock.js";
+import { fakeNetwork, json, type RecordedRequest } from "../fakes.js";
 import { AUTH_DATA, fakeClock, REFRESH, refreshes, rouvySessionOpened } from "../server-harness.js";
 
 export const ORIGIN = "https://mcp.example.com";
@@ -37,19 +38,34 @@ export function fakeKV() {
   return { kv, entries };
 }
 
-/** Firebase's answer to a good email and password, for `refresh-for-<uid>` style refresh tokens. */
+let signIns = 0;
+
+/**
+ * Firebase's answer to a good email and password. Each sign-in gets its own refresh token,
+ * `refresh-for-<uid>~<n>`, as two Grants of one rider would.
+ */
 export function signedIn(uid: string, email: string) {
   return () =>
-    json({ localId: uid, email, idToken: `id-token-${uid}`, refreshToken: `refresh-for-${uid}`, registered: true });
+    json({ localId: uid, email, idToken: `id-token-${uid}`, refreshToken: `refresh-for-${uid}~${++signIns}`, registered: true });
+}
+
+/** securetoken answering for whichever uid the refresh token names, whichever sign-in it came from. */
+function refreshesAnySignIn(clock: Clock) {
+  const refresh = refreshes(clock);
+  return (request: RecordedRequest) => {
+    const body = new URLSearchParams(request.body);
+    body.set("refresh_token", (body.get("refresh_token") ?? "").replace(/~\d+$/, ""));
+    return refresh({ body: body.toString() });
+  };
 }
 
 /**
  * The Worker as deployed, in Node: the real OAuth provider over an in-memory KV, its Durable
  * Object binding answered by one in-process riders host, and a fake network behind both.
  */
-export function hostedWorker({ allowList = "", routes = {} }: { allowList?: string; routes?: Routes } = {}) {
+export function hostedWorker({ allowList, routes = {} }: { allowList?: string; routes?: Routes } = {}) {
   const clock = fakeClock();
-  const allRoutes: Routes = { [REFRESH]: refreshes(clock), [AUTH_DATA]: rouvySessionOpened, ...routes };
+  const allRoutes: Routes = { [REFRESH]: refreshesAnySignIn(clock), [AUTH_DATA]: rouvySessionOpened, ...routes };
   const network = fakeNetwork(allRoutes);
   // When each request reached the network, in virtual time.
   const clockReadings: number[] = [];
