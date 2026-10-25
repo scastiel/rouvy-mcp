@@ -2,7 +2,7 @@
 
 Unofficial Rouvy MCP server.
 
-It reads your own [Rouvy](https://rouvy.com) Activities and serves them to any MCP client (Claude Desktop, Claude Code, Cursorâ€¦): list your Activities, read Rouvy's summary of one, and analyse its per-second data (splits, any stretch you pick, downsampled streams). Read-only, local and stdio only, or [self-hosted on Cloudflare](#self-host-on-cloudflare) for web clients such as claude.ai. Please read the [disclaimer](#disclaimer) before you use it.
+It reads your own [Rouvy](https://rouvy.com) Activities and serves them to any MCP client (Claude Desktop, Claude Code, Cursorâ€¦): list your Activities, read Rouvy's summary of one, and analyse its per-second data (splits, any stretch you pick, downsampled streams). Read-only. It runs locally over stdio, or [self-hosted on Cloudflare](#self-host-on-cloudflare) for web clients such as claude.ai. Please read the [disclaimer](#disclaimer) before you use it.
 
 ## Install
 
@@ -101,17 +101,14 @@ You need a Cloudflare account on **Workers Paid** ($5/month: tool calls take 57â
 
    There's nothing to create for the Durable Object: the code puts it in the EU jurisdiction (`RIDERS.jurisdiction("eu")`), and the first deploy creates it.
 4. **Keep both compatibility flags,** `nodejs_compat` and `global_fetch_strictly_public`. Without the second one, the OAuth provider refuses to fetch a client's metadata document, and claude.ai can't connect.
-5. **Set the custom domain,** in `wrangler.toml` (`mcp.example.org` stands for yours):
+5. **Set the custom domain** in `wrangler.toml` (`mcp.example.org` stands for yours). Add these two lines at the top level, above `[vars]`:
 
    ```toml
    workers_dev = false
    routes = [{ pattern = "mcp.example.org", custom_domain = true }]
-
-   [vars]
-   PUBLIC_URL = "https://mcp.example.org"
    ```
 
-   `PUBLIC_URL` is the bare origin, with no path or trailing slash. Its `/mcp` is the OAuth audience and sits in every rider's connector, so **never change the domain once riders have connected**: every Grant would stop working.
+   and change the existing `PUBLIC_URL` under `[vars]` to `"https://mcp.example.org"`. It's the bare origin, with no path or trailing slash. Its `/mcp` is the OAuth audience and sits in every rider's connector, so **never change the domain once riders have connected**: every Grant would stop working.
 6. **Set the allow-list,** the Rouvy emails allowed to sign in, separated by commas or whitespace. Anyone else is told the instance is invite-only.
 
    ```sh
@@ -121,7 +118,7 @@ You need a Cloudflare account on **Workers Paid** ($5/month: tool calls take 57â
 7. **Deploy** with `npm run deploy`, which stamps the version, then runs `wrangler deploy`. Check `https://mcp.example.org/.well-known/oauth-protected-resource/mcp`: its `resource` is `https://mcp.example.org/mcp`.
 8. **Connect:** in claude.ai, add a custom connector with the URL `https://mcp.example.org/mcp`, sign in with an allow-listed Rouvy account, and ask for your last Activities.
 
-**Running it:** [docs/operations.md](docs/operations.md) has how long Grants and tokens live, and how to [kill one rider](docs/operations.md#kill-one-rider), which is also how you handle an erasure request. To shut the instance down for good, follow the [Hard stop runbook](docs/runbooks/hard-stop.md). The repo's daily drift canary only checks the Public instance: watch your own `/health` (it runs the same account-free checks from your Worker's egress, and reports the block signals the runbook acts on).
+**Running it:** [docs/operations.md](docs/operations.md) has how long Grants and tokens live, and how to [kill one rider](docs/operations.md#kill-one-rider), which is also how you handle an erasure request. To shut your instance down for good, take the same steps as the Public instance's [Hard stop runbook](docs/runbooks/hard-stop.md), on your own account: close the sign-in page, tell your riders, delete the KV namespace, then the Worker. The repo's daily drift canary only checks the Public instance: watch your own `/health` (it runs the same account-free checks from your Worker's egress, and reports the block signals the runbook acts on).
 
 ## Disclaimer
 

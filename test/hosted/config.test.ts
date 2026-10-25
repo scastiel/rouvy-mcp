@@ -22,7 +22,7 @@ describe("the deployed Worker's config", () => {
 
 describe("the hosting recipe (docs/spec-m2.md §3, §11)", () => {
   const publicUrl = String(config.vars.PUBLIC_URL);
-  const publicHost = new URL(publicUrl).hostname;
+  const { hostname: publicHost, origin, protocol } = new URL(publicUrl);
 
   it("turns on nodejs_compat, and global_fetch_strictly_public, which CIMD needs", () => {
     expect(config.compatibility_flags).toEqual(expect.arrayContaining(["nodejs_compat", "global_fetch_strictly_public"]));
@@ -34,17 +34,20 @@ describe("the hosting recipe (docs/spec-m2.md §3, §11)", () => {
   });
 
   it("sets PUBLIC_URL to a bare https origin, whose /mcp is the OAuth audience", () => {
-    expect(new URL(publicUrl).protocol).toBe("https:");
-    expect(new URL(publicUrl).origin).toBe(publicUrl);
+    expect(protocol).toBe("https:");
+    expect(origin).toBe(publicUrl);
   });
 
-  it("serves a custom domain PUBLIC_URL, and only it: workers.dev off", () => {
-    const customDomains: string[] = [];
-    for (const route of config.routes ?? []) {
-      if (typeof route === "object" && "custom_domain" in route && route.custom_domain) customDomains.push(route.pattern);
-    }
+  it("serves PUBLIC_URL's host and only it: a custom domain with workers.dev off, or workers.dev alone", () => {
+    const routes: unknown[] = config.routes ?? [];
+    const customDomains = routes
+      .filter((route): route is { pattern: string; custom_domain: true } =>
+        typeof route === "object" && route !== null && "custom_domain" in route && route.custom_domain === true,
+      )
+      .map((route) => route.pattern);
     if (publicHost.endsWith(".workers.dev")) {
       expect(customDomains).toEqual([]);
+      expect(config.workers_dev ?? true).toBe(true);
     } else {
       expect(customDomains).toEqual([publicHost]);
       expect(config.workers_dev).toBe(false);
