@@ -13,14 +13,14 @@ export interface GetActivityIntervalsInput {
  * snapshot's FTP: the one Rouvy stored with this Activity, never the rider's current one.
  */
 export async function getActivityIntervals(rouvy: RouvyClient, { activity_id, every_sec }: GetActivityIntervalsInput) {
-  const { records, channels, ftp, durationSec, riderSettings, notes } = await loadActivityFile(rouvy, activity_id);
+  const { records, options, durationSec, riderSettings, notes } = await loadActivityFile(rouvy, activity_id);
 
   const splits: WindowStats[] = [];
   for (let start = 0; start < durationSec; start += every_sec) {
-    splits.push(windowStats(records, start, Math.min(start + every_sec, durationSec), { channels, ftp }));
+    splits.push(windowStats(records, start, Math.min(start + every_sec, durationSec), options));
   }
   const of = `of ${splits.length} ${splits.length === 1 ? "split" : "splits"}`;
-  notes.push(...gapNotes(splits, channels, (count) => `${count} ${of}`));
+  notes.push(...gapNotes(splits, options.channels, (count) => `${count} ${of}`));
 
   return dropEmpty({
     activity_id,

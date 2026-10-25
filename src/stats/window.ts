@@ -86,7 +86,7 @@ export function bestEfforts(
   const power = records.filter((r) => r.sec >= startSec && r.sec < endSec).map((r) => r.power ?? 0);
   const efforts: Record<string, number> = {};
   for (const [label, durationSec] of durations) {
-    if (durationSec > endSec - startSec || durationSec > power.length) continue;
+    if (durationSec > power.length) continue;
     let sum = power.slice(0, durationSec).reduce((total, w) => total + w, 0);
     let best = sum;
     for (let i = durationSec; i < power.length; i++) {
@@ -105,6 +105,7 @@ export function bestEfforts(
 export function decoupling(first: WindowStats, second: WindowStats): number | undefined {
   const { avg_power_w: p1, avg_hr_bpm: h1 } = first;
   const { avg_power_w: p2, avg_hr_bpm: h2 } = second;
+  // The first half's ratio is the divisor, so it needs real numbers; 0 W in the second half is a result.
   if (!p1 || !h1 || p2 == null || !h2) return undefined;
   const ratio1 = p1 / h1;
   return tidy(((ratio1 - p2 / h2) / ratio1) * 100);

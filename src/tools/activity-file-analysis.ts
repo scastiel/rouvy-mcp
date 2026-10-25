@@ -1,10 +1,11 @@
 import type { RouvyClient } from "../rouvy/client.js";
-import { NP_WINDOW_SEC, type WindowStats } from "../stats/window.js";
+import { NP_WINDOW_SEC, type WindowOptions, type WindowStats } from "../stats/window.js";
 import { dataChannels, type DataChannels } from "./common.js";
 
 /**
- * What every analysis of an Activity file starts from: its records, which channels the Activity
- * has (as get_activity reports them), and the Activity snapshot's FTP, never the current one.
+ * What every analysis of an Activity file starts from: its records, plus what Rouvy's detail says
+ * about them (which channels the Activity has, as get_activity reports them, and the Activity
+ * snapshot's FTP, never the current one), and a note for each channel or setting that's missing.
  */
 export async function loadActivityFile(rouvy: RouvyClient, activityId: string) {
   const { records } = await rouvy.getActivityFile(activityId);
@@ -19,10 +20,10 @@ export async function loadActivityFile(rouvy: RouvyClient, activityId: string) {
   if (!channels.cadence) notes.push("No cadence data in this Activity: cadence stats left out.");
   if (!channels.speed) notes.push("No speed data in this Activity: speed stats left out.");
 
+  const options: WindowOptions = { channels, ftp };
   return {
     records,
-    channels,
-    ftp,
+    options,
     /** The records cover seconds 0 to the last one, inclusive. */
     durationSec: records[records.length - 1]!.sec + 1,
     riderSettings: { source: "Activity snapshot", ftp_w: ftp },

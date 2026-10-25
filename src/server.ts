@@ -94,12 +94,7 @@ export function createServer({ credentials, fetch = globalThis.fetch, clock = sy
         end_sec: z.number().int().min(1).describe("Window end, in seconds from the start (after start_sec)."),
       },
     },
-    (input) =>
-      toolResult(() => {
-        // Checked before any request: the input schema can't compare two fields.
-        if (input.end_sec <= input.start_sec) throw new InputError("end_sec must be after start_sec.");
-        return getWindowStats(rouvy, input);
-      }),
+    (input) => toolResult(() => getWindowStats(rouvy, input)),
   );
 
   return server;

@@ -14,7 +14,7 @@ const noCadenceOrSpeed = ({ activity }: { activity: Record<string, any> }) => {
 };
 
 describe("get_window_stats", () => {
-  it("over the whole ride, finds Rouvy's own power peaks and lands close to its NP and climbing", async () => {
+  it("over the whole Activity, finds Rouvy's own power peaks and lands close to its NP and climbing", async () => {
     const { windowStats } = await routeActivity();
 
     const result = await windowStats({ start_sec: 0, end_sec: 1958 });
@@ -112,6 +112,20 @@ describe("get_window_stats", () => {
     expect(body.halves.first).not.toHaveProperty("np_w");
     expect(Object.keys(body.best_efforts_w)).toEqual(["5s", "30s"]);
     expect(body.notes).toEqual(["NP needs at least 30 s of data: left out of both halves."]);
+  });
+
+  it("leaves out the halves and best efforts of a window too short for them, and says why", async () => {
+    const { windowStats } = await routeActivity();
+
+    const body = JSON.parse(text(await windowStats({ start_sec: 100, end_sec: 101 })));
+
+    expect(body.stats).toHaveProperty("avg_power_w");
+    for (const field of ["halves", "decoupling_pct", "best_efforts_w"]) expect(body).not.toHaveProperty(field);
+    expect(body.notes).toEqual([
+      "NP needs at least 30 s of data: left out of the window.",
+      "The window is too short to split in halves: halves and decoupling left out.",
+      "No best effort fits in a window shorter than 5 s.",
+    ]);
   });
 
   it("ends a window that runs past the end of the Activity file at its end, and says so", async () => {
