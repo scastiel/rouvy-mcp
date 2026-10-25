@@ -1,7 +1,7 @@
 import type { Clock } from "./clock.js";
 import type { ActivityDetail } from "./schemas.js";
 
-/** RPE and validation status can still change after the ride, so details don't live long. */
+/** RPE and validation status can still change after the Activity is uploaded, so details don't live long. */
 const DETAIL_TTL_MS = 10 * 60_000;
 
 /** Activity details, in memory, keyed by uid so another account never sees them. */

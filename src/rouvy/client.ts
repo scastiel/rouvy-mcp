@@ -31,8 +31,10 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
   async function getData(
     route: string,
     path: string,
-    params: (uid: string) => Record<string, string> = () => ({}),
-    onNotFound?: () => Error,
+    {
+      params = () => ({}),
+      onNotFound,
+    }: { params?: (uid: string) => Record<string, string>; onNotFound?: () => Error } = {},
   ) {
     let renewed = false;
     let followedRedirect = false;
@@ -79,11 +81,9 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
       const uid = await sessions.uid();
       const cached = listCache.get(uid, offset);
       if (cached) return cached;
-      const payload = await getData(LIST_ROUTE, "/resources/activities-pagination.data", (sessionUid) => ({
-        offset: String(offset),
-        firebaseUid: sessionUid,
-        _routes: LIST_ROUTE,
-      }));
+      const payload = await getData(LIST_ROUTE, "/resources/activities-pagination.data", {
+        params: (sessionUid) => ({ offset: String(offset), firebaseUid: sessionUid, _routes: LIST_ROUTE }),
+      });
       const rows = parseActivityListPage(payload);
       listCache.set(uid, offset, rows);
       return rows;
@@ -92,7 +92,9 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
       const uid = await sessions.uid();
       const cached = detailCache.get(uid, activityId);
       if (cached) return cached;
-      const payload = await getData(DETAIL_ROUTE, `/activity/${encodeURIComponent(activityId)}.data`, undefined, activityNotFound);
+      const payload = await getData(DETAIL_ROUTE, `/activity/${encodeURIComponent(activityId)}.data`, {
+        onNotFound: activityNotFound,
+      });
       const detail = parseActivityDetail(payload);
       detailCache.set(uid, activityId, detail);
       return detail;

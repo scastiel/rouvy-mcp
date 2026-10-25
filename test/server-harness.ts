@@ -19,9 +19,9 @@ export const DETAIL_ROUTE = "routes/_main.activity.$id";
 /** The fake network's key for one Activity's detail payload. */
 export const detail = (activityId: string) => `riders.rouvy.com/activity/${activityId}.data`;
 
-/** Real Activity detail payloads, redacted: a ride on a route (with segment passes), a workout (with laps). */
-export const ROUTE_ACTIVITY = "260624154125-fixture0";
-export const WORKOUT_ACTIVITY = "260519023818-fixture1";
+/** Real Activity detail payloads, redacted: an Activity on a route (with segment passes), a workout Activity (with laps). */
+export const ROUTE_ACTIVITY = "260503195435-fixture0";
+export const WORKOUT_ACTIVITY = "260703200246-fixture1";
 export const fixtureDetail = (name: "route" | "workout") =>
   readFileSync(new URL(`./fixtures/activity-${name}.data`, import.meta.url), "utf8");
 

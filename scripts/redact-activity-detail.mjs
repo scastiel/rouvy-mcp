@@ -16,8 +16,10 @@ if (!input || !output) throw new Error("usage: redact-activity-detail.mjs <raw> 
 const ROUTE = "routes/_main.activity.$id";
 // Same idea as the list fixture: a random, unrecorded shift of 60–180 days.
 const SHIFT_MS = -randomInt(60 * 86_400, 180 * 86_400) * 1000;
-// Kept short: enough to show the shape, not the ride.
+// Kept short: enough to show the shape, not the Activity.
 const KEEP_POINTS = 10;
+// Timeseries keys holding latitude and longitude (Appendix A): emptied, they'd locate the route.
+const POSITION_KEYS = new Set(["18", "19"]);
 
 const raw = await readFile(input);
 const { value, done } = await decode(new Blob([raw]).stream());
@@ -37,7 +39,7 @@ const redacted = {
     data: {
       activity: {
         id,
-        title: `Fixture route ${number}`,
+        title: `Fixture Activity ${number}`,
         training: activity.training,
         startUTC: start.toISOString(),
         startDateDisplay: start.toUTCString(),
@@ -73,18 +75,29 @@ const redacted = {
         executionScore: activity.executionScore,
         rateOfPerceivedExertion: activity.rateOfPerceivedExertion,
         laps: activity.laps,
-        // Leaderboards name other riders: dropped.
-        segmentsPasses: activity.segmentsPasses.map(({ leaderboards: _, ...pass }) => ({ ...pass, id: segmentId(pass.id) })),
-        timeseries: activity.timeseries.map((series) => ({ ...series, values: series.values.slice(0, KEEP_POINTS) })),
+        // Only the pass's own numbers: leaderboards name other riders, positions and trophies place the rider.
+        segmentsPasses: activity.segmentsPasses.map((pass) => ({
+          id: segmentId(pass.id),
+          elapsedTimeSeconds: pass.elapsedTimeSeconds,
+          avgPowerWatts: pass.avgPowerWatts,
+          avgSpeedMetersPerSecond: pass.avgSpeedMetersPerSecond,
+          avgHeartRateBPM: pass.avgHeartRateBPM,
+        })),
+        timeseries: activity.timeseries.map((series) => ({
+          ...series,
+          values: POSITION_KEYS.has(String(series.key)) ? [] : series.values.slice(0, KEEP_POINTS),
+        })),
         route: {
           id: `fixture-route-${number}`,
           name: `Fixture route ${number}`,
-          distanceInMeters: activity.route?.distanceInMeters,
-          elevationInMeters: activity.route?.elevationInMeters,
+          // Only what names a segment pass; positions along the route would identify it.
           segments: (activity.route?.segments ?? []).map((segment, i) => ({
-            ...segment,
             id: segmentId(segment.id),
             name: `Segment ${i + 1}`,
+            type: segment.type,
+            distanceMeters: segment.distanceMeters,
+            elevationMeters: segment.elevationMeters,
+            averageGrade: segment.averageGrade,
           })),
         },
       },
@@ -95,7 +108,8 @@ const redacted = {
       userData: { ftp: 999, weight: 999, zoneValues: {} },
       activityTotalTimeInSec: data.activityTotalTimeInSec,
       activityTotalDistance: data.activityTotalDistance,
-      geometry: (data.geometry ?? []).slice(0, KEEP_POINTS),
+      // Profile points without their position.
+      geometry: (data.geometry ?? []).slice(0, KEEP_POINTS).map(({ distance, altitude, slope }) => ({ distance, altitude, slope })),
       currentUserUid: "fixture-uid",
       isOwner: data.isOwner,
     },

@@ -57,7 +57,7 @@ const activityDetail = z.object({
     startUTC: z.string(),
     title: z.string().nullish(),
     training: z.string().nullish(),
-    // The Activity snapshot: the Rider settings Rouvy stored with this ride.
+    // The Activity snapshot: the Rider settings Rouvy stored with this Activity.
     user: z
       .object({
         FTP: z.number().nullish(),

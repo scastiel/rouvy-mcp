@@ -130,6 +130,7 @@ Shared conventions:
   - **the Rider settings used**: FTP, weight, max HR, power and HR zones from the Activity snapshot,
   - **available fields**: which data exist (power, HR, cadence…), whether an Activity file exists, and a note for each stat left out and why.
 - **Source:** the detail payload. The Activity file only fills what Rouvy doesn't provide. If there's no Activity file, `get_activity` still works and notes "no Activity file".
+- **Built ([#17](https://github.com/scastiel/rouvymcp/issues/17)):** a data channel (power, HR, cadence, speed) exists when Rouvy's `aggrs` max for it is above 0; a missing sensor comes back as zeros. Whether an Activity file exists is read from `exportLink` (null = none) without probing the file, which would cost a request; a 403/404 on download is handled by the tools that download it (§8). Nothing is filled from the Activity file yet: a number Rouvy leaves out is left out with a note. Rouvy's floats are rounded to 2 decimals to strip float noise (`1802.7200000000003`).
 
 ### 5.3 `get_activity_intervals`
 
@@ -340,8 +341,8 @@ Decoded `["routes/resources.activities-pagination"].data`:
 
 Seen on real captures (2026-10-25):
 - `zones.pwr` / `zones.hr` are the 7 zone **tops**; the last is a sentinel (`6000` W, `300` bpm), so zone 7 is open-ended. `hists.pwr` / `hists.hr` are seconds per zone (they sum to the elapsed time).
-- `PP` is 5 s, 30 s, 1 min, 5 min, 20 min, 30 min, 60 min; a peak longer than the ride is `0`.
-- `laps` is empty on route rides; workouts have one lap per workout step.
+- `PP` is 5 s, 30 s, 1 min, 5 min, 20 min, 30 min, 60 min; a peak longer than the Activity is `0`.
+- `laps` is empty on route Activities; workout Activities have one lap per workout step.
 
 `timeseries` (not used; for reference): per-second `{key, values[]}`. `1` HR, `2` cadence, `3` speed m/s, `4` power, `5` altitude, `12`/`RouteDistance` distance, `18`/`19` lat/lon, `16` and `102` unknown.
 

@@ -39,9 +39,9 @@ describe("get_activity", () => {
     expect(result.isError).toBeFalsy();
     expect(JSON.parse(text(result))).toEqual({
       id: ROUTE_ACTIVITY,
-      title: "Fixture route 0",
+      title: "Fixture Activity 0",
       type: "ROUTE",
-      start: "2026-06-24T15:41:25.130Z",
+      start: "2026-05-03T19:54:35.130Z",
       elapsed_time_sec: 1956,
       moving_time_sec: 1956,
       distance_m: 12400,
@@ -196,6 +196,17 @@ describe("get_activity with missing data", () => {
     expect(body.notes).toEqual([
       "No power data in this Activity: NP, IF, TSS, power peaks, power stats, %FTP and time in power zones left out.",
     ]);
+  });
+
+  it("without power or an FTP, still says the FTP is left out", async () => {
+    const result = await routeActivityWhere(({ activity }) => {
+      activity.total.aggrs.pwrW = { min: 0, max: 0, avg: 0 };
+      activity.user.FTP = 0;
+    });
+
+    const body = JSON.parse(text(result));
+    expect(body.rider_settings).not.toHaveProperty("ftp_w");
+    expect(body.notes).toContain("The Activity snapshot has no FTP; left out.");
   });
 
   it("leaves out optional numbers Rouvy sends as null or omits, and says so", async () => {

@@ -44,6 +44,7 @@ export async function getActivity(rouvy: RouvyClient, { activity_id }: GetActivi
   } else if (!ftp) {
     notes.push("The Activity snapshot has no FTP: IF, TSS, %FTP and time in power zones left out.");
   }
+  if (!has.power && !ftp) notes.push("The Activity snapshot has no FTP; left out.");
   if (!has.heart_rate) notes.push("No heart-rate data in this Activity: heart-rate stats and time in HR zones left out.");
   if (!has.cadence) notes.push("No cadence data in this Activity: cadence stats left out.");
   if (!has.speed) notes.push("No speed data in this Activity: speed stats left out.");
