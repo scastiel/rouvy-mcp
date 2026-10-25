@@ -1,21 +1,10 @@
 import type { RouvyClient } from "../rouvy/client.js";
 import type { ActivityDetail, Aggregates, MinMaxAvg } from "../rouvy/schemas.js";
-import { dataChannels, dropEmpty, tidy, type DataChannels } from "./common.js";
+import { dataChannels, dropEmpty, POWER_PEAKS, tidy, type DataChannels } from "./common.js";
 
 export interface GetActivityInput {
   activity_id: string;
 }
-
-/** Rouvy's `PP`, in order. */
-const POWER_PEAKS = [
-  ["5s", 5],
-  ["30s", 30],
-  ["1min", 60],
-  ["5min", 300],
-  ["20min", 1200],
-  ["30min", 1800],
-  ["60min", 3600],
-] as const;
 
 /**
  * One Activity's summary: Rouvy's own numbers, as Rouvy gives them, so they match the Rouvy app.

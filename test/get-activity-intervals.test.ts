@@ -1,49 +1,13 @@
-import { decode } from "turbo-stream";
 import { describe, expect, it } from "vitest";
-import {
-  activityFile,
-  AUTH_DATA,
-  connect,
-  detail,
-  DETAIL_ROUTE,
-  fakeClock,
-  fakeNetwork,
-  fixtureActivityFile,
-  fixtureDetail,
-  memoryCredentials,
-  REFRESH,
-  refreshes,
-  ROUTE_ACTIVITY,
-  rouvySessionOpened,
-  syntheticActivityFile,
-  text,
-  turboStream,
-} from "./server-harness.js";
+import { ROUTE_ACTIVITY, routeActivityServer, syntheticActivityFile, text } from "./server-harness.js";
 
-type Detail = { activity: Record<string, any>; exportLink: string | null };
 type Split = Record<string, number>;
 
-/** The route Activity with its Activity file, optionally changed the way Rouvy might send it. */
-async function routeActivity({
-  change = () => {},
-  file = () => new Response(fixtureActivityFile(), { headers: { "content-type": "application/octet-stream" } }),
-}: { change?: (detail: Detail) => void; file?: () => Response } = {}) {
-  const { value, done } = await decode(new Blob([fixtureDetail("route")]).stream());
-  await done;
-  const payload = structuredClone(value) as Record<string, { data: Detail }>;
-  change(payload[DETAIL_ROUTE]!.data);
-  const clock = fakeClock();
-  const credentials = memoryCredentials({ refreshToken: "refresh-for-uid-1", uid: "uid-1" });
-  const network = fakeNetwork({
-    [REFRESH]: refreshes(clock),
-    [AUTH_DATA]: rouvySessionOpened,
-    [detail(ROUTE_ACTIVITY)]: () => turboStream(payload),
-    [activityFile(ROUTE_ACTIVITY)]: file,
-  });
-  const client = await connect({ credentials: credentials.provider, fetch: network.fetch, clock });
+async function routeActivity(options: Parameters<typeof routeActivityServer>[0] = {}) {
+  const server = await routeActivityServer(options);
   const intervals = (args: Record<string, unknown> = {}) =>
-    client.callTool({ name: "get_activity_intervals", arguments: { activity_id: ROUTE_ACTIVITY, ...args } });
-  return { client, network, clock, intervals };
+    server.client.callTool({ name: "get_activity_intervals", arguments: { activity_id: ROUTE_ACTIVITY, ...args } });
+  return { ...server, intervals };
 }
 
 const sum = (splits: Split[], field: string) => splits.reduce((total, split) => total + split[field]!, 0);

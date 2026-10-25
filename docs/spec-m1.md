@@ -144,6 +144,11 @@ Shared conventions:
 - **Input:** `activity_id`, `start_sec` (int ≥ 0), `end_sec` (int > `start_sec`).
 - **Output:** the same stats as one split, for that window, plus efforts inside it: best efforts (peak powers for the durations that fit), first-half vs second-half comparison, climbing, and HR:power drift (decoupling).
 - **Source:** the Activity file.
+- **Built ([#19](https://github.com/scastiel/rouvymcp/issues/19)):**
+  - Best efforts use Rouvy's `PP` durations (5 s … 60 min). Over the whole route fixture they match Rouvy's `PP` to the watt.
+  - The halves split the window at its middle second, and each gets the full split stats.
+  - Decoupling is Friel's Pw:HR: `(avg power / avg HR, first half − same, second half) / first half`, in percent. Positive means HR drifted up for the same power. It needs power and HR, else it's left out with a note.
+  - A window that runs past the end of the Activity file ends there, with a note. One that starts at or after the end is an error naming the file's length. `end_sec <= start_sec` is an input error before any request.
 
 ### 5.5 `get_activity_streams`
 
