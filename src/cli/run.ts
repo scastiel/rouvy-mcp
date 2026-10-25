@@ -28,7 +28,10 @@ export async function runCli(args: string[], deps: CliDeps): Promise<number> {
       case "status":
         return await status(context);
       default:
-        deps.terminal.printError("Usage: rouvy-mcp <login | logout | status>");
+        deps.terminal.printError(
+          "Usage: rouvy-mcp            serve MCP over stdio (what MCP clients run)\n" +
+            "       rouvy-mcp <login | logout | status>",
+        );
         return 2;
     }
   } catch (error) {

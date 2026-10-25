@@ -172,6 +172,8 @@ Full redacted endpoint catalog: [Appendix A](#appendix-a-rouvy-web-api).
 
 - **Encoding:** `riders.rouvy.com` is a Remix / React Router 7 app. Each page has a single-fetch data route `<path>.data` returning `text/x-script` in **turbo-stream v2**. Some keys are **deferred** (they arrive later in the same response as promises), so the decoder must await nested promises.
 - **Logged-out signal:** HTTP **202** with a `SingleFetchRedirect` to `account.rouvy.com/sign-in`, not 401.
+- **Rouvy's own cookies:** a fresh Session's first `.data` call answers 202 with a `SingleFetchRedirect` back to the same page (not to sign-in) and `Set-Cookie: rouvysession_tos` (plus `__cf_bm`, `GAESA`). The client keeps every cookie riders.rouvy.com sets in an in-memory jar per Session, retries once, and sends them on later calls. A second such redirect in a row is *Rouvy changed its API*. Found while building [#16](https://github.com/scastiel/rouvymcp/issues/16).
+- **Decoding:** `SingleFetchRedirect` is a turbo-stream custom type, so the decoder registers a plugin for it (as React Router does); without one, `decode` throws.
 - **Activity list:** `GET /resources/activities-pagination.data?offset=<n>&firebaseUid=<uid>&_routes=routes%2Fresources.activities-pagination`. Session cookie and the user's own uid required. Pages of 10, row `offset`. End of list = empty `activities` array.
 - **Activity detail:** `GET /activity/<activityId>.data` (~460 KB). Uses `activity` (summary numbers, the snapshot under `activity.user`, laps, segment passes) and `exportLink`. Ignores the embedded `timeseries` (undocumented numeric keys): per-second data comes from the Activity file.
 - **Activity file:** `GET https://activities.virtualtraining.eu/export/activity_export_fit_<activityId>.fit`. Raw, uncompressed FIT on Google Cloud Storage. **No authentication**: it's a capability URL, so treat ids and the URL as secrets. Take the URL from `exportLink` (the route the web app uses). 403/404 there = *no Activity file* (§8).
@@ -349,6 +351,6 @@ Decoded `["routes/resources.activities-pagination"].data`:
 
 - `POST https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=<key>`: JSON `{email, password, returnSecureToken: true}` → `idToken` (1 h), `refreshToken`, `localId`.
 - `POST https://account.rouvy.com/resources/auth.data`: form `{idToken, uid, refreshToken, riders: "true", isNew: "false"}` → 202 redirect to `/redirect/riders-portal`, `Set-Cookie: rouvy_session` (`Domain=rouvy.com; HttpOnly; Secure; SameSite=Lax`, 30 days) and `rouvysession_tos` (1 day).
-- `rouvy_session` = base64 JSON `{idToken, refreshToken, uid}`; works on `riders.rouvy.com` on its own.
+- `rouvy_session` = base64 JSON `{idToken, refreshToken, uid}`. On `riders.rouvy.com`, the first `.data` call with only this cookie gets a 202 `SingleFetchRedirect` to the same page plus `Set-Cookie: rouvysession_tos`; retrying with that cookie returns the data (verified 2026-10-24, §6).
 - `POST https://securetoken.googleapis.com/v1/token?key=<key>`: `grant_type=refresh_token&refresh_token=…` → new `id_token` (standard Firebase; accepted by `auth.data`, verified §4).
 - `POST https://riders.rouvy.com/login.data` (prior art's route): behind a Cloudflare UA-pattern rule and an apparent login rate rule. Not used.
