@@ -4,7 +4,7 @@ import { tidy } from "../tools/common.js";
 export const STREAM_FIELDS = ["power", "heart_rate", "cadence", "speed", "altitude", "distance"] as const;
 export type StreamField = (typeof STREAM_FIELDS)[number];
 
-const RECORD_KEY = {
+export const RECORD_KEY = {
   power: "power",
   heart_rate: "heartRate",
   cadence: "cadence",

@@ -1,5 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { writePrivateFile } from "../private-file.js";
 import type { Credentials, CredentialsProvider } from "./types.js";
 
 export interface CredentialsPathContext {
@@ -32,10 +33,7 @@ export function createFileCredentialsProvider(path: string): CredentialsProvider
     },
     async save(credentials) {
       await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-      // A fresh 0600 file renamed into place: the secret never sits in a file with looser permissions.
-      const temp = `${path}.${process.pid}.tmp`;
-      await writeFile(temp, JSON.stringify(credentials, null, 2) + "\n", { mode: 0o600 });
-      await rename(temp, path);
+      await writePrivateFile(path, JSON.stringify(credentials, null, 2) + "\n");
     },
   };
 }

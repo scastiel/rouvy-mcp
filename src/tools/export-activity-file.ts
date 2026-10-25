@@ -1,5 +1,6 @@
 import type { ActivityRecord } from "../activity-file/parse.js";
 import type { RouvyClient } from "../rouvy/client.js";
+import { RECORD_KEY, STREAM_FIELDS } from "../stats/streams.js";
 import type { ExportStorage } from "../storage/types.js";
 
 export const EXPORT_FORMATS = ["fit", "csv"] as const;
@@ -9,7 +10,7 @@ export interface ExportActivityFileInput {
   format: (typeof EXPORT_FORMATS)[number];
 }
 
-/** Writes one Activity's file to the rider's export folder, overwriting an earlier export. */
+/** Writes one Activity's Activity file, or its records as CSV, to the rider's export folder, overwriting an earlier export. */
 export async function exportActivityFile(
   rouvy: RouvyClient,
   storage: ExportStorage,
@@ -26,25 +27,33 @@ export async function exportActivityFile(
  * positions in degrees. Decimals are FIT's own resolution for each field: anything finer is float
  * noise from its scaling (100.39999999999998 m).
  */
-const CSV_COLUMNS: readonly [name: string, key: keyof ActivityRecord, decimals?: number][] = [
+const DECIMALS: Partial<Record<keyof ActivityRecord, number>> = {
+  power: 0,
+  heartRate: 0,
+  cadence: 0,
+  speed: 3,
+  altitude: 1,
+  distance: 2,
+  positionLat: 7,
+  positionLong: 7,
+};
+
+/** get_activity_streams' fields, named the same, between the time and the position. */
+const CSV_COLUMNS: readonly (readonly [name: string, key: keyof ActivityRecord])[] = [
   ["sec", "sec"],
   ["timestamp", "timestamp"],
-  ["power", "power", 0],
-  ["heart_rate", "heartRate", 0],
-  ["cadence", "cadence", 0],
-  ["speed", "speed", 3],
-  ["altitude", "altitude", 1],
-  ["distance", "distance", 2],
-  ["position_lat", "positionLat", 7],
-  ["position_long", "positionLong", 7],
+  ...STREAM_FIELDS.map((field) => [field, RECORD_KEY[field]] as const),
+  ["position_lat", "positionLat"],
+  ["position_long", "positionLong"],
 ];
 
 /** One row per second; a reading the Activity file doesn't have is an empty cell, never 0. */
 function toCsv(records: ActivityRecord[]): string {
   const header = CSV_COLUMNS.map(([name]) => name).join(",");
   const rows = records.map((record) =>
-    CSV_COLUMNS.map(([, key, decimals]) => {
+    CSV_COLUMNS.map(([, key]) => {
       const value = record[key];
+      const decimals = DECIMALS[key];
       return typeof value === "number" && decimals !== undefined ? Number(value.toFixed(decimals)) : (value ?? "");
     }).join(","),
   );
