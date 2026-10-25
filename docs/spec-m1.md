@@ -156,6 +156,11 @@ Shared conventions:
 - **Output:** downsampled columns (the mean of each bucket), one array per field, plus `resolution_sec_used`.
 - **Cap: 500 points per field per call.** If the request would go over it, the server raises the resolution to the smallest value that fits and reports `resolution_sec_used` (not an error).
 - **Source:** the Activity file.
+- **Built ([#20](https://github.com/scastiel/rouvymcp/issues/20)):**
+  - Buckets run from `start_sec` in steps of `resolution_sec_used`; the last one is shorter when the stretch doesn't divide evenly. The resolution used is `max(resolution_sec, ceil(length / 500))`, with a note when it was raised.
+  - Each value is the mean of the window stats for that bucket: power, cadence and speed count a second with no reading as 0 (zeros count), so a 30 s bucket matches `get_window_stats`' averages over the same 30 s. Heart rate, altitude and distance average only the readings there are, and a bucket with none is `null`, never 0.
+  - A field is **missing** when Rouvy's aggregates say the Activity has no such channel (power, HR, cadence, speed: the same rule as `available_fields`), or when no record in the Activity file carries it (e.g. altitude). It's left out of `streams`, listed in `missing_fields`, and a note says why.
+  - `start_sec` / `end_sec` behave as in `get_window_stats`: `end_sec <= start_sec` is an input error before any request, a start at or past the end is an error naming the file's length, and an end past the file is clamped there with a note. No time column: bucket `i` starts at `start_sec + i × resolution_sec_used`.
 
 ### 5.6 `export_activity_file`
 

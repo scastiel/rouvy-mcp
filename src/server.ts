@@ -11,7 +11,9 @@ import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
 import { getActivity } from "./tools/get-activity.js";
 import { InputError } from "./tools/errors.js";
+import { STREAM_FIELDS } from "./stats/streams.js";
 import { getActivityIntervals } from "./tools/get-activity-intervals.js";
+import { getActivityStreams, MAX_STREAM_POINTS } from "./tools/get-activity-streams.js";
 import { getWindowStats } from "./tools/get-window-stats.js";
 import { listActivities } from "./tools/list-activities.js";
 
@@ -95,6 +97,36 @@ export function createServer({ credentials, fetch = globalThis.fetch, clock = sy
       },
     },
     (input) => toolResult(() => getWindowStats(rouvy, input)),
+  );
+
+  server.registerTool(
+    "get_activity_streams",
+    {
+      description:
+        "Downsampled per-second data of one Activity, from its Activity file, to chart or reason about: one " +
+        "array per field, each value the mean of one bucket of resolution_sec_used seconds from start_sec (the " +
+        "last bucket may be shorter). Units: power W, heart_rate bpm, cadence rpm, speed m/s, altitude m, " +
+        `distance m from the start. At most ${MAX_STREAM_POINTS} points per field: a finer request is served at ` +
+        "the smallest resolution that fits. A field the Activity doesn't have is listed in missing_fields; a " +
+        "bucket with no data is null.",
+      inputSchema: {
+        activity_id: activityId,
+        fields: z
+          .array(z.enum(STREAM_FIELDS))
+          .min(1)
+          .default(["power", "heart_rate", "cadence"])
+          .describe("Which columns to return."),
+        resolution_sec: z.number().int().min(1).default(30).describe("Bucket length in seconds (at least 1)."),
+        start_sec: z.number().int().min(0).optional().describe("Start, in seconds from the start (default 0)."),
+        end_sec: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("End, in seconds from the start (after start_sec; default the end of the Activity)."),
+      },
+    },
+    (input) => toolResult(() => getActivityStreams(rouvy, input)),
   );
 
   return server;
