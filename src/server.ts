@@ -3,9 +3,9 @@ import { z } from "zod";
 import { VERSION } from "./constants.js";
 import type { CredentialsProvider } from "./credentials/types.js";
 import { withUserAgent } from "./http.js";
-import { createRouvyClient } from "./rouvy/client.js";
+import { createRouvyClient, type RouvyClient } from "./rouvy/client.js";
 import { systemClock, type Clock } from "./rouvy/clock.js";
-import { isTerminalAuthFailure, RouvyError } from "./rouvy/errors.js";
+import { isNotLoggedIn, isTerminalAuthFailure, RouvyError } from "./rouvy/errors.js";
 import { createPushback } from "./rouvy/pushback.js";
 import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
@@ -27,15 +27,26 @@ const activityId = z
   .regex(ACTIVITY_ID, "an Activity id as returned by list_activities (YYMMDDhhmmss-xxxxxxxx)")
   .describe("An Activity id as returned by list_activities.");
 
-export interface ServerOptions {
+export interface RiderOptions {
   credentials: CredentialsProvider;
   fetch?: typeof globalThis.fetch;
   /**
-   * An already-polite fetch from `createPoliteFetch`. Servers given the same one share its queue
-   * and cool-down. Without one, the server builds its own from `fetch`.
+   * An already-polite fetch from `createPoliteFetch`. Riders given the same one share its queue
+   * and cool-down. Without one, the rider builds its own from `fetch`.
    */
   politeFetch?: typeof globalThis.fetch;
   clock?: Clock;
+}
+
+/**
+ * One rider's live Session and caches, in memory. Servers built around the same Rider share them:
+ * the hosted server keeps one per uid and builds a server per HTTP request (spec-m2 §7.3).
+ */
+export interface Rider {
+  readonly rouvy: RouvyClient;
+}
+
+export type ServerOptions = (RiderOptions | { rider: Rider }) & {
   /** Where export_activity_file writes. Without one, the tool isn't registered. */
   storage?: ExportStorage;
   /**
@@ -43,25 +54,33 @@ export interface ServerOptions {
    * error goes back. The hosted server ends the Grant then; stdio has nothing to do.
    */
   onTerminalAuthFailure?: () => void;
-}
+  /**
+   * What a tool says when no Session could be opened, instead of stdio's "run the login command".
+   * The hosted server tells the rider to reconnect (spec-m2 §7.6).
+   */
+  notLoggedInMessage?: (terminal: boolean) => string;
+};
 
 /** One request at a time, backing off when Rouvy pushes back, with the honest user agent (spec §7). */
 export function createPoliteFetch(fetch: typeof globalThis.fetch, clock: Clock = systemClock): typeof globalThis.fetch {
   return withUserAgent(createRequestQueue(createPushback(fetch, clock), clock));
 }
 
-/** The transport-agnostic core: knows nothing about stdio, files or passwords. */
-export function createServer({
+export function createRider({
   credentials,
   fetch = globalThis.fetch,
   clock = systemClock,
   politeFetch = createPoliteFetch(fetch, clock),
-  storage,
-  onTerminalAuthFailure,
-}: ServerOptions): McpServer {
-  const rouvy = createRouvyClient(politeFetch, createSessionManager(politeFetch, credentials, clock), clock);
+}: RiderOptions): Rider {
+  return { rouvy: createRouvyClient(politeFetch, createSessionManager(politeFetch, credentials, clock), clock) };
+}
+
+/** The transport-agnostic core: knows nothing about stdio, files or passwords. */
+export function createServer(options: ServerOptions): McpServer {
+  const { storage, onTerminalAuthFailure, notLoggedInMessage } = options;
+  const { rouvy } = "rider" in options ? options.rider : createRider(options);
   const server = new McpServer({ name: "rouvy-mcp", version: VERSION });
-  const toolResult = (run: () => Promise<unknown>) => runTool(run, onTerminalAuthFailure);
+  const toolResult = (run: () => Promise<unknown>) => runTool(run, onTerminalAuthFailure, notLoggedInMessage);
 
   server.registerTool(
     "list_activities",
@@ -175,14 +194,20 @@ export function createServer({
   return server;
 }
 
-async function runTool(run: () => Promise<unknown>, onTerminalAuthFailure?: () => void): Promise<CallToolResult> {
+async function runTool(
+  run: () => Promise<unknown>,
+  onTerminalAuthFailure?: () => void,
+  notLoggedInMessage?: (terminal: boolean) => string,
+): Promise<CallToolResult> {
   try {
     return { content: [{ type: "text", text: JSON.stringify(await run(), null, 2) }] };
   } catch (error) {
     if (isTerminalAuthFailure(error)) onTerminalAuthFailure?.();
     // Only our own messages reach the client: anything else could carry a token or a response body.
     const message =
-      error instanceof RouvyError || error instanceof InputError
+      notLoggedInMessage && isNotLoggedIn(error)
+        ? notLoggedInMessage(isTerminalAuthFailure(error))
+        : error instanceof RouvyError || error instanceof InputError
         ? error.message
         : "Something went wrong talking to Rouvy. Try later.";
     return { isError: true, content: [{ type: "text", text: message }] };

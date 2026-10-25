@@ -1,0 +1,191 @@
+import { createHash, randomBytes } from "node:crypto";
+import { createRidersHost, type GrantProps } from "../../src/hosted/riders.js";
+import { createWorker } from "../../src/hosted/worker.js";
+import { fakeNetwork, json } from "../fakes.js";
+import { AUTH_DATA, fakeClock, REFRESH, refreshes, rouvySessionOpened } from "../server-harness.js";
+
+export const ORIGIN = "https://mcp.example.com";
+export const MCP_URL = `${ORIGIN}/mcp`;
+export const SIGN_IN = "identitytoolkit.googleapis.com/v1/accounts:signInWithPassword";
+const REDIRECT_URI = "https://client.example.com/callback";
+
+type Routes = Parameters<typeof fakeNetwork>[0];
+
+/** Workers KV, in memory: what the provider uses of it. */
+export function fakeKV() {
+  const entries = new Map<string, { value: string; metadata?: unknown }>();
+  const kv = {
+    async get(key: string, options?: "json" | { type?: string }) {
+      const entry = entries.get(key);
+      if (!entry) return null;
+      const type = typeof options === "string" ? options : options?.type;
+      return type === "json" ? JSON.parse(entry.value) : entry.value;
+    },
+    async put(key: string, value: string, options?: { metadata?: unknown }) {
+      entries.set(key, { value, metadata: options?.metadata });
+    },
+    async delete(key: string) {
+      entries.delete(key);
+    },
+    async list({ prefix = "" }: { prefix?: string } = {}) {
+      const keys = [...entries]
+        .filter(([name]) => name.startsWith(prefix))
+        .map(([name, { metadata }]) => ({ name, metadata }));
+      return { keys, list_complete: true, cacheStatus: null };
+    },
+  };
+  return { kv, entries };
+}
+
+/** Firebase's answer to a good email and password, for `refresh-for-<uid>` style refresh tokens. */
+export function signedIn(uid: string, email: string) {
+  return () =>
+    json({ localId: uid, email, idToken: `id-token-${uid}`, refreshToken: `refresh-for-${uid}`, registered: true });
+}
+
+/**
+ * The Worker as deployed, in Node: the real OAuth provider over an in-memory KV, its Durable
+ * Object binding answered by one in-process riders host, and a fake network behind both.
+ */
+export function hostedWorker({ allowList = "", routes = {} }: { allowList?: string; routes?: Routes } = {}) {
+  const clock = fakeClock();
+  const allRoutes: Routes = { [REFRESH]: refreshes(clock), [AUTH_DATA]: rouvySessionOpened, ...routes };
+  const network = fakeNetwork(allRoutes);
+  // When each request reached the network, in virtual time.
+  const clockReadings: number[] = [];
+  const timedFetch: typeof globalThis.fetch = (input, init) => {
+    clockReadings.push(clock.now());
+    return network.fetch(input, init);
+  };
+  const { kv, entries } = fakeKV();
+  const host = createRidersHost({ fetch: timedFetch, clock });
+  const jurisdictions: string[] = [];
+  const env = {
+    OAUTH_KV: kv,
+    PUBLIC_URL: ORIGIN,
+    ALLOW_LIST: allowList,
+    RIDERS: {
+      jurisdiction(name: string) {
+        jurisdictions.push(name);
+        return {
+          idFromName: (objectName: string) => objectName,
+          get: () => ({ serve: (request: Request, props: GrantProps) => host.serve(request, props) }),
+        };
+      },
+    },
+  };
+  const worker = createWorker({ fetch: timedFetch });
+  const ctx = { waitUntil() {}, passThroughOnException() {}, props: {} };
+
+  async function fetch(path: string, init?: RequestInit): Promise<Response> {
+    return worker.fetch!(new Request(new URL(path, ORIGIN), init) as never, env as never, ctx as never);
+  }
+
+  return { fetch, network: { ...network, routes: allRoutes }, kv: entries, jurisdictions, clockReadings };
+}
+
+type Worker = ReturnType<typeof hostedWorker>;
+
+/** A public client registered through DCR, as Cursor (or claude.ai without CIMD) does. */
+export async function registerClient(worker: Worker): Promise<string> {
+  const response = await worker.fetch("/register", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      client_name: "Test client",
+      redirect_uris: [REDIRECT_URI],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+    }),
+  });
+  if (response.status !== 201) throw new Error(`registration failed: ${response.status} ${await response.text()}`);
+  return ((await response.json()) as { client_id: string }).client_id;
+}
+
+/** Opens the sign-in page the way a client sends the rider there. */
+export async function openSignIn(worker: Worker, clientId: string) {
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const query = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: REDIRECT_URI,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    state: "client-state",
+    resource: MCP_URL,
+  });
+  const page = await worker.fetch(`/authorize?${query}`);
+  return { page, verifier, clientId };
+}
+
+type SignInPage = Awaited<ReturnType<typeof openSignIn>>;
+
+/** Fills the sign-in form on a page and submits it from the same browser. */
+export async function submitSignIn(worker: Worker, { page }: Pick<SignInPage, "page">, fields: Record<string, string>) {
+  const html = await page.text();
+  const handle = /name="handle" value="([^"]+)"/.exec(html)?.[1];
+  if (!handle) throw new Error(`no form on the page:\n${html}`);
+  const cookie = page.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0])
+    .join("; ");
+  return worker.fetch("/authorize", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+    body: new URLSearchParams({ handle, ...fields }),
+  });
+}
+
+/** Trades the code the sign-in redirected with for an access token, as the client would. */
+export async function exchangeCode(worker: Worker, signIn: SignInPage, redirect: Response): Promise<string> {
+  const location = new URL(redirect.headers.get("location") ?? "");
+  const code = location.searchParams.get("code");
+  if (!code) throw new Error(`no code in ${location}`);
+  const response = await worker.fetch("/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: REDIRECT_URI,
+      client_id: signIn.clientId,
+      code_verifier: signIn.verifier,
+      resource: MCP_URL,
+    }),
+  });
+  if (response.status !== 200) throw new Error(`token exchange failed: ${response.status} ${await response.text()}`);
+  return ((await response.json()) as { access_token: string }).access_token;
+}
+
+/** The whole flow for an allow-listed rider: register, sign in, exchange the code. */
+export async function connectRider(worker: Worker, email: string): Promise<string> {
+  const signIn = await openSignIn(worker, await registerClient(worker));
+  const redirect = await submitSignIn(worker, signIn, { email, password: "correct horse" });
+  if (redirect.status !== 302) throw new Error(`sign-in failed: ${redirect.status} ${await redirect.text()}`);
+  return exchangeCode(worker, signIn, redirect);
+}
+
+/** One MCP request over Streamable HTTP; by default at the 2025 era claude.ai falls back to. */
+export async function mcpRequest(
+  worker: Worker,
+  token: string | undefined,
+  method: string,
+  params: unknown = {},
+  protocolVersion = "2025-11-25",
+) {
+  return worker.fetch("/mcp", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+      "mcp-protocol-version": protocolVersion,
+      // The 2026 era repeats the method (and a tool's name) in headers, and checks they match the body.
+      ...(protocolVersion >= "2026" ? { "mcp-method": method } : {}),
+      ...(protocolVersion >= "2026" && method === "tools/call" ? { "mcp-name": (params as { name: string }).name } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+}
