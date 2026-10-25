@@ -1,6 +1,6 @@
 import { VERSION } from "./version.js";
 
-export { VERSION };
+export { VERSION } from "./version.js";
 
 /** Sent on every request. Keep this shape: Cloudflare lets a semver'd `name/x.y.z (+url)` through. */
 export const USER_AGENT = `rouvy-mcp/${VERSION} (+https://github.com/scastiel/rouvy-mcp)`;

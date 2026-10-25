@@ -5,7 +5,7 @@ import type { CredentialsProvider } from "./credentials/types.js";
 import { withUserAgent } from "./http.js";
 import { createRouvyClient } from "./rouvy/client.js";
 import { systemClock, type Clock } from "./rouvy/clock.js";
-import { RouvyError } from "./rouvy/errors.js";
+import { isTerminalAuthFailure, RouvyError } from "./rouvy/errors.js";
 import { createPushback } from "./rouvy/pushback.js";
 import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
@@ -38,6 +38,11 @@ export interface ServerOptions {
   clock?: Clock;
   /** Where export_activity_file writes. Without one, the tool isn't registered. */
   storage?: ExportStorage;
+  /**
+   * Called when a tool failed because the rider's login is over (spec-m2 §6), before the tool
+   * error goes back. The hosted server ends the Grant then; stdio has nothing to do.
+   */
+  onTerminalAuthFailure?: () => void;
 }
 
 /** One request at a time, backing off when Rouvy pushes back, with the honest user agent (spec §7). */
@@ -52,9 +57,11 @@ export function createServer({
   clock = systemClock,
   politeFetch = createPoliteFetch(fetch, clock),
   storage,
+  onTerminalAuthFailure,
 }: ServerOptions): McpServer {
   const rouvy = createRouvyClient(politeFetch, createSessionManager(politeFetch, credentials, clock), clock);
   const server = new McpServer({ name: "rouvy-mcp", version: VERSION });
+  const toolResult = (run: () => Promise<unknown>) => runTool(run, onTerminalAuthFailure);
 
   server.registerTool(
     "list_activities",
@@ -168,10 +175,11 @@ export function createServer({
   return server;
 }
 
-async function toolResult(run: () => Promise<unknown>): Promise<CallToolResult> {
+async function runTool(run: () => Promise<unknown>, onTerminalAuthFailure?: () => void): Promise<CallToolResult> {
   try {
     return { content: [{ type: "text", text: JSON.stringify(await run(), null, 2) }] };
   } catch (error) {
+    if (isTerminalAuthFailure(error)) onTerminalAuthFailure?.();
     // Only our own messages reach the client: anything else could carry a token or a response body.
     const message =
       error instanceof RouvyError || error instanceof InputError

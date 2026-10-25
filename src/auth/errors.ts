@@ -6,10 +6,10 @@ export class AuthError extends Error {
    * True when trying again can't help: Firebase refused the credentials themselves (spec-m2 §6).
    * Anything else (rate limits, unknown answers, Rouvy refusing a fresh idToken) is transient.
    */
-  constructor(
-    message: string,
-    readonly terminal = false,
-  ) {
+  readonly terminal: boolean;
+
+  constructor(message: string, { terminal = false }: { terminal?: boolean } = {}) {
     super(message);
+    this.terminal = terminal;
   }
 }

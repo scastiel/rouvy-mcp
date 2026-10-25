@@ -3,7 +3,17 @@ import { isTerminalAuthFailure } from "../src/rouvy/errors.js";
 import { createSessionManager } from "../src/rouvy/session-manager.js";
 import { createPoliteFetch } from "../src/server.js";
 import { firebaseError } from "./fakes.js";
-import { AUTH_DATA, fakeClock, fakeNetwork, memoryCredentials, REFRESH, refreshes, rouvySessionOpened } from "./server-harness.js";
+import {
+  AUTH_DATA,
+  connect,
+  fakeClock,
+  fakeNetwork,
+  memoryCredentials,
+  REFRESH,
+  refreshes,
+  rouvySessionOpened,
+  text,
+} from "./server-harness.js";
 
 type Handler = Parameters<typeof fakeNetwork>[0][string];
 
@@ -66,6 +76,38 @@ describe("a failed Session renewal", () => {
     const error = await renewalFailure({ refresh: () => firebaseError("SOMETHING_NEW") });
 
     expect(isTerminalAuthFailure(error)).toBe(false);
+  });
+});
+
+describe("a server whose rider's login dies", () => {
+  async function callWith(refresh: Handler) {
+    const clock = fakeClock();
+    const network = fakeNetwork({ [REFRESH]: refresh });
+    const credentials = memoryCredentials({ refreshToken: "refresh-for-uid-1", uid: "uid-1" });
+    let terminalFailures = 0;
+    const client = await connect({
+      credentials: credentials.provider,
+      fetch: network.fetch,
+      clock,
+      onTerminalAuthFailure: () => terminalFailures++,
+    });
+    const result = await client.callTool({ name: "list_activities", arguments: {} });
+    return { result, terminalFailures };
+  }
+
+  it("tells its caller when the failure is terminal, and the rider still gets the tool error", async () => {
+    const { result, terminalFailures } = await callWith(() => firebaseError("TOKEN_EXPIRED"));
+
+    expect(terminalFailures).toBe(1);
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("Not logged in to Rouvy");
+  });
+
+  it("says nothing to its caller when the failure is transient", async () => {
+    const { result, terminalFailures } = await callWith(() => firebaseError("TOO_MANY_ATTEMPTS_TRY_LATER"));
+
+    expect(terminalFailures).toBe(0);
+    expect(result.isError).toBe(true);
   });
 });
 
