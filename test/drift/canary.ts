@@ -1,5 +1,6 @@
 import { ROUVY_FIREBASE_WEB_KEY } from "../../src/constants.js";
 import { withUserAgent } from "../../src/http.js";
+import { LIST_ROUTE } from "../../src/rouvy/schemas.js";
 import { asRedirect, decodeSingleFetch } from "../../src/rouvy/turbo-stream.js";
 
 export interface CanaryCheck {
@@ -10,7 +11,7 @@ export interface CanaryCheck {
 }
 
 /** Well-formed, but no Activity has it. */
-const BOGUS_ACTIVITY_ID = "000000000000-canary00";
+export const BOGUS_ACTIVITY_ID = "000000000000-canary00";
 
 /**
  * Account-free checks that Rouvy still answers the way rouvy-mcp expects. Read-only: GETs to
@@ -19,7 +20,7 @@ const BOGUS_ACTIVITY_ID = "000000000000-canary00";
 export async function runCanary(fetch: typeof globalThis.fetch): Promise<CanaryCheck[]> {
   const honestFetch = withUserAgent(fetch);
   const checks: [string, (fetch: typeof globalThis.fetch) => Promise<CheckResult>][] = [
-    ["anonymous GET of the Activity list", (f) => anonymousRead(f, "/resources/activities-pagination.data")],
+    ["anonymous GET of the Activity list", (f) => anonymousRead(f, `/resources/activities-pagination.data?offset=0&_routes=${encodeURIComponent(LIST_ROUTE)}`)],
     ["anonymous GET of an Activity detail", (f) => anonymousRead(f, `/activity/${BOGUS_ACTIVITY_ID}.data`)],
     ["Firebase sign-in with the pinned key and made-up credentials", firebaseKeyWorks],
     ["account.rouvy.com/sign-in still carries the pinned Firebase key", signInPageHasKey],

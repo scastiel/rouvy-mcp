@@ -45,7 +45,8 @@ describe("contract with the live Rouvy", () => {
     const ours = windowStats(records, 0, durationSec, options).np_w!;
     const theirs = activity.total!.NP!;
 
-    console.log(`Activity ${id}: our NP ${ours} W, Rouvy's ${theirs} W`);
+    // Never the Activity id (spec §2): only the two numbers.
+    console.log(`Whole-ride NP: ours ${ours} W, Rouvy's ${theirs} W`);
     expect(Math.abs(ours - theirs) / theirs).toBeLessThan(0.02);
   });
 });

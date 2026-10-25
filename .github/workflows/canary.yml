@@ -40,9 +40,11 @@ jobs:
             echo
             echo "Run: $RUN_URL"
           } > body.md
-          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number')
+          # A label, not a title search: the search index can lag and open a duplicate.
+          gh label create drift-canary --color B60205 --description "Opened by the Rouvy drift canary" --force
+          existing=$(gh issue list --state open --label drift-canary --json number --jq '.[0].number')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body-file body.md
           else
-            gh issue create --title "$title" --body-file body.md
+            gh issue create --title "$title" --label drift-canary --body-file body.md
           fi

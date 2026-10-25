@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ROUVY_FIREBASE_WEB_KEY } from "../src/constants.js";
-import { runCanary } from "./drift/canary.js";
+import { BOGUS_ACTIVITY_ID, runCanary } from "./drift/canary.js";
 import { fakeNetwork, firebaseError } from "./fakes.js";
 
 /** Rouvy's anonymous answer to any `.data` read, as captured on 2026-10-25. */
@@ -23,7 +23,7 @@ function signInPage(key = ROUVY_FIREBASE_WEB_KEY): Response {
 function rouvyToday(overrides: Parameters<typeof fakeNetwork>[0] = {}) {
   return fakeNetwork({
     "riders.rouvy.com/resources/activities-pagination.data": () => signInRedirect("/resources/activities-pagination"),
-    "riders.rouvy.com/activity/000000000000-canary00.data": () => signInRedirect("/activity/000000000000-canary00"),
+    [`riders.rouvy.com/activity/${BOGUS_ACTIVITY_ID}.data`]: () => signInRedirect(`/activity/${BOGUS_ACTIVITY_ID}`),
     "identitytoolkit.googleapis.com/v1/accounts:signInWithPassword": () => firebaseError("INVALID_LOGIN_CREDENTIALS"),
     "account.rouvy.com/sign-in": () => signInPage(),
     ...overrides,
@@ -61,13 +61,13 @@ describe("the daily canary", () => {
 
   it("says the encoding changed when the answer no longer decodes as turbo-stream v2", async () => {
     const network = rouvyToday({
-      "riders.rouvy.com/activity/000000000000-canary00.data": () =>
+      [`riders.rouvy.com/activity/${BOGUS_ACTIVITY_ID}.data`]: () =>
         new Response('{"redirect":"https://account.rouvy.com/sign-in"}', { status: 202 }),
     });
 
-    const [, detail] = await runCanary(network.fetch);
+    const [, activityDetail] = await runCanary(network.fetch);
 
-    expect(detail).toMatchObject({ ok: false, detail: expect.stringMatching(/turbo-stream v2.*encoding changed/) });
+    expect(activityDetail).toMatchObject({ ok: false, detail: expect.stringMatching(/turbo-stream v2.*encoding changed/) });
   });
 
   it("fails when an anonymous read is no longer sent to sign-in", async () => {
