@@ -101,22 +101,23 @@ You need a Cloudflare account on **Workers Paid** ($5/month: tool calls take 57â
      routes = [{ pattern = "mcp.example.org", custom_domain = true }]
      ```
 
-3. **Create the KV namespace** that holds clients, Grants and tokens, and paste the `id` it prints into `wrangler.toml`'s `[[kv_namespaces]]`:
+3. **Name yourself as the operator,** `OPERATOR_NAME` and `OPERATOR_CONTACT` under `[vars]`: your name and the address riders write to about their data. The privacy notice at `<PUBLIC_URL>/privacy` and the sign-in page show them. Read the notice before inviting anyone, since it's written for the Public instance: you own its accuracy for yours.
+4. **Create the KV namespace** that holds clients, Grants and tokens, and paste the `id` it prints into `wrangler.toml`'s `[[kv_namespaces]]`:
 
    ```sh
    npx wrangler kv namespace create OAUTH_KV
    ```
 
    There's nothing to create for the Durable Object: the code puts it in the EU jurisdiction (`RIDERS.jurisdiction("eu")`), and the first deploy creates it.
-4. **Keep both compatibility flags,** `nodejs_compat` and `global_fetch_strictly_public`. Without the second one, the OAuth provider refuses to fetch a client's metadata document, and claude.ai can't connect.
-5. **Set the allow-list,** the Rouvy emails allowed to sign in, separated by commas or whitespace. Anyone else is told the instance is invite-only.
+5. **Keep both compatibility flags,** `nodejs_compat` and `global_fetch_strictly_public`. Without the second one, the OAuth provider refuses to fetch a client's metadata document, and claude.ai can't connect.
+6. **Set the allow-list,** the Rouvy emails allowed to sign in, separated by commas or whitespace. Anyone else is told the instance is invite-only.
 
    ```sh
    npx wrangler secret put ALLOW_LIST
    ```
 
-6. **Deploy** with `npm run deploy`, which stamps the version, then runs `wrangler deploy`. Check `<PUBLIC_URL>/.well-known/oauth-protected-resource/mcp`: its `resource` is `<PUBLIC_URL>/mcp`.
-7. **Connect:** in claude.ai, add a custom connector with the URL `<PUBLIC_URL>/mcp`, sign in with an allow-listed Rouvy account, and ask for your last Activities.
+7. **Deploy** with `npm run deploy`, which stamps the version, then runs `wrangler deploy`. Check `<PUBLIC_URL>/.well-known/oauth-protected-resource/mcp`: its `resource` is `<PUBLIC_URL>/mcp`.
+8. **Connect:** in claude.ai, add a custom connector with the URL `<PUBLIC_URL>/mcp`, sign in with an allow-listed Rouvy account, and ask for your last Activities.
 
 **Running it:** [docs/operations.md](docs/operations.md) has how long Grants and tokens live, and how to [kill one rider](docs/operations.md#kill-one-rider), which is also how you handle an erasure request. To shut your instance down for good, take the same steps as the Public instance's [Hard stop runbook](docs/runbooks/hard-stop.md), on your own account: close the sign-in page, tell your riders, delete the KV namespace, then the Worker. The repo's daily drift canary only checks the Public instance: watch your own `/health` (it runs the same account-free checks from your Worker's egress, and reports the block signals the runbook acts on).
 

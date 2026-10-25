@@ -3,7 +3,7 @@ import { DurableObject } from "cloudflare:workers";
 import { withUserAgent } from "../http.js";
 import { authorize } from "./authorize.js";
 import { consoleLog, type BlockSignal, type Log } from "./log.js";
-import { privacyPage } from "./pages.js";
+import { privacyPage, type Operator } from "./pages.js";
 import { observeUpstream } from "./upstream.js";
 import { createRidersHost, type GrantProps, type Health, type RidersHost, type Served } from "./riders.js";
 
@@ -18,6 +18,10 @@ export interface Env {
   PUBLIC_URL: string;
   /** The riders' Rouvy emails, separated by commas or whitespace (a Worker secret). Unset: nobody. */
   ALLOW_LIST?: string;
+  /** Who runs this instance: the controller the privacy notice names (spec-m2 §10). */
+  OPERATOR_NAME: string;
+  /** Where riders send privacy requests and complaints. */
+  OPERATOR_CONTACT: string;
   /** Set by the provider before it calls our handlers. */
   OAUTH_PROVIDER?: OAuthHelpers;
 }
@@ -42,6 +46,10 @@ export class Riders extends DurableObject<Env> {
   health(): Promise<Health> {
     return this.host.health();
   }
+}
+
+function operator(env: Env): Operator {
+  return { name: env.OPERATOR_NAME, contact: env.OPERATOR_CONTACT };
 }
 
 function riders(env: Env): Pick<RidersHost, "serve" | "recordBlockSignal" | "health"> {
@@ -91,9 +99,9 @@ function createProvider(publicUrl: string, fetch: typeof globalThis.fetch, log: 
           // The sign-in page's Rouvy check can meet a block too: the Durable Object counts it.
           const onBlockSignal = (kind: BlockSignal) => ctx.waitUntil(riders(env).recordBlockSignal(kind));
           const observed = withUserAgent(observeUpstream(fetch, { log, onBlockSignal }));
-          return authorize(request, { oauth: env.OAUTH_PROVIDER!, allowList: env.ALLOW_LIST, fetch: observed, log });
+          return authorize(request, { oauth: env.OAUTH_PROVIDER!, allowList: env.ALLOW_LIST, fetch: observed, log, operator: operator(env) });
         }
-        if (pathname === "/privacy") return privacyPage();
+        if (pathname === "/privacy") return privacyPage(operator(env));
         if (pathname === "/health" && request.method === "GET") {
           const health = await riders(env).health();
           return Response.json(health, { status: health.ok ? 200 : 503, headers: { "cache-control": "no-store" } });

@@ -8,7 +8,7 @@ import { AuthError } from "../auth/errors.js";
 import { signInWithPassword } from "../auth/firebase.js";
 import { openRouvySession } from "../auth/rouvy-session.js";
 import type { Log } from "./log.js";
-import { errorPage, signInPage, type Problem } from "./pages.js";
+import { errorPage, signInPage, type Operator, type Problem } from "./pages.js";
 import type { GrantProps } from "./riders.js";
 
 export interface AuthorizeOptions {
@@ -18,6 +18,8 @@ export interface AuthorizeOptions {
   /** Already carries the honest user agent. */
   fetch: typeof globalThis.fetch;
   log: Log;
+  /** Who runs this instance, named on the page above the password field. */
+  operator: Operator;
 }
 
 const INVITE_ONLY: Problem = { message: "This instance is invite-only.", inviteOnly: true };
@@ -29,10 +31,10 @@ const NO_CONSENT: Problem = { message: "Tick both boxes to connect." };
  * Firebase ever sees them, then M1's sign-in and one Rouvy check. The password is used once and
  * dropped; the Grant keeps only the refresh token, encrypted by the provider.
  */
-export async function authorize(request: Request, { oauth, allowList, fetch, log }: AuthorizeOptions): Promise<Response> {
+export async function authorize(request: Request, { oauth, allowList, fetch, log, operator }: AuthorizeOptions): Promise<Response> {
   const allowed = parseAllowList(allowList);
   try {
-    if (request.method === "GET") return await showSignIn(oauth, await oauth.parseAuthRequest(request));
+    if (request.method === "GET") return await showSignIn(oauth, operator, await oauth.parseAuthRequest(request));
     if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "GET, POST" } });
 
     const form = await request.formData();
@@ -46,7 +48,7 @@ export async function authorize(request: Request, { oauth, allowList, fetch, log
     const email = String(form.get("email") ?? "").trim();
     const password = String(form.get("password") ?? "");
     const retry = async (problem: Problem) => {
-      const response = await showSignIn(oauth, approved.request, { email, problem });
+      const response = await showSignIn(oauth, operator, approved.request, { email, problem });
       for (const cookie of approved.headers.getSetCookie()) response.headers.append("set-cookie", cookie);
       return response;
     };
@@ -86,10 +88,15 @@ export async function authorize(request: Request, { oauth, allowList, fetch, log
   }
 }
 
-async function showSignIn(oauth: OAuthHelpers, authRequest: AuthRequest, form?: { email: string; problem: Problem }) {
+async function showSignIn(
+  oauth: OAuthHelpers,
+  operator: Operator,
+  authRequest: AuthRequest,
+  form?: { email: string; problem: Problem },
+) {
   const details = await oauth.describeConsent(authRequest); // first: a failed lookup leaves nothing in KV
   const consent = await oauth.beginConsent(authRequest);
-  return signInPage({ details, handle: consent.handle, headers: consent.headers, ...form });
+  return signInPage({ details, operator, handle: consent.handle, headers: consent.headers, ...form });
 }
 
 function parseAllowList(secret = ""): Set<string> {

@@ -166,6 +166,27 @@ describe("the sign-in page", () => {
 });
 
 describe("consent on the sign-in page", () => {
+  it("words the risk box around Rouvy's terms and the Hard stop, and the health box as Art. 9 explicit consent", async () => {
+    const worker = hostedWorker();
+    const { page } = await openSignIn(worker, await registerClient(worker));
+
+    const html = await page.text();
+    const label = (name: string) => new RegExp(`<input name="${name}"[^>]*>\\s*<span>(.*?)</span>`, "s").exec(html)?.[1] ?? "";
+
+    expect(label("accept_risk")).toContain("§7.c");
+    expect(label("accept_risk")).toContain("§14.a.vi");
+    expect(label("accept_risk")).toContain("Hard stop");
+    expect(label("consent_health")).toContain("explicit consent");
+    expect(label("consent_health")).toContain("GDPR Art. 9(2)(a)");
+  });
+
+  it("says who runs the instance the rider is handing their Rouvy login to", async () => {
+    const worker = hostedWorker();
+    const { page } = await openSignIn(worker, await registerClient(worker));
+
+    expect(await page.text()).toContain("Unofficial, not affiliated with Rouvy. Run by Test Operator.");
+  });
+
   it.each([
     ["neither box", {}],
     ["only the risk box", { accept_risk: "on" }],
@@ -203,6 +224,68 @@ describe("the privacy notice", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(await response.text()).toContain("Privacy");
+  });
+
+  it("names this instance's operator as controller and Law 25 person in charge, with their contact address", async () => {
+    const worker = hostedWorker({ operator: { name: "Ada <Operator>", contact: "privacy@ada.example" } });
+
+    const html = await (await worker.fetch("/privacy")).text();
+
+    expect(html).toContain("Ada &#60;Operator&#62;");
+    expect(html).not.toContain("<Operator>");
+    expect(html).toContain('<a href="mailto:privacy@ada.example">privacy@ada.example</a>');
+    expect(html).toMatch(/person in charge of the protection of personal information/i);
+  });
+
+  it("has the twelve sections of the Art. 13 notice, in order", async () => {
+    const html = await (await hostedWorker().fetch("/privacy")).text();
+
+    const headings = [...html.matchAll(/<h2>(.*?)<\/h2>/g)].map(([, heading]) => heading);
+
+    expect(headings).toEqual([
+      "1. Who is responsible",
+      "2. Person in charge under Québec's Law 25",
+      "3. What it's for",
+      "4. Legal basis",
+      "5. Who receives your data",
+      "6. Where it's kept",
+      "7. How long it's kept",
+      "8. Your rights, and how to disconnect",
+      "9. Complaints",
+      "10. No automated decisions",
+      "11. If Rouvy objects: the Hard stop",
+      "12. EU Data Act",
+    ]);
+  });
+
+  it("states the bases, recipients and retention the instance actually runs with", async () => {
+    const html = await (await hostedWorker().fetch("/privacy")).text();
+
+    for (const fact of [
+      "Art. 6(1)(a)",
+      "Art. 9(2)(a)",
+      "Cloudflare",
+      "processor",
+      "European Union",
+      "30 days",
+      "7 days",
+      "30 minutes",
+      "No ride data is stored",
+      "Commission d'accès à l'information",
+      "24 hours",
+      "duties of its Art. 6",
+    ]) {
+      expect(html).toContain(fact);
+    }
+  });
+
+  it("lists the three ways to disconnect, and erasure on request", async () => {
+    const html = await (await hostedWorker().fetch("/privacy")).text();
+
+    expect(html).toMatch(/remove the connector/i);
+    expect(html).toMatch(/change your Rouvy password/i);
+    expect(html).toMatch(/write to/i);
+    expect(html).toMatch(/erase/i);
   });
 });
 
