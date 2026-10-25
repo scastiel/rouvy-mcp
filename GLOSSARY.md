@@ -30,6 +30,10 @@ _Avoid_: Ride-time settings, historical settings
 A logged-in connection to Rouvy on the rider's behalf. Never a ride.
 _Avoid_: Login (for the connection itself)
 
+**Grant**:
+A rider's permission for one MCP client to use a hosted rouvy-mcp server on their behalf, created when they sign in and ended by revocation or disuse.
+_Avoid_: Session, connection, login, authorization
+
 ### Hosting
 
 **Public instance**:
