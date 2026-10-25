@@ -39,3 +39,7 @@ _Avoid_: Session, connection, login, authorization
 **Public instance**:
 The hosted rouvy-mcp server the maintainer runs for invited riders, as opposed to one a rider hosts for themselves.
 _Avoid_: The service, SaaS
+
+**Hard stop**:
+Shutting the Public instance down and deleting every Grant within 24 hours of Rouvy objecting to it or blocking it.
+_Avoid_: Kill switch, shutdown (alone)
