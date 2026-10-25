@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { FitBaseType, FitEncoder } from "fit-file-parser";
-import { encode } from "turbo-stream";
+import { decode, encode } from "turbo-stream";
 import type { Clock } from "../src/rouvy/clock.js";
 import type { Credentials, CredentialsProvider } from "../src/credentials/types.js";
 import { createServer } from "../src/server.js";
@@ -142,6 +142,32 @@ export function loggedOut(): Response {
 }
 
 export { fakeNetwork, json, rouvySessionOpened };
+
+type Detail = { activity: Record<string, any>; exportLink: string | null };
+
+/**
+ * A logged-in rider with the route Activity and its Activity file, optionally changed the way
+ * Rouvy might send them.
+ */
+export async function routeActivityServer({
+  change = () => {},
+  file = () => new Response(fixtureActivityFile(), { headers: { "content-type": "application/octet-stream" } }),
+}: { change?: (detail: Detail) => void; file?: () => Response } = {}) {
+  const { value, done } = await decode(new Blob([fixtureDetail("route")]).stream());
+  await done;
+  const payload = structuredClone(value) as Record<string, { data: Detail }>;
+  change(payload[DETAIL_ROUTE]!.data);
+  const clock = fakeClock();
+  const credentials = memoryCredentials({ refreshToken: "refresh-for-uid-1", uid: "uid-1" });
+  const network = fakeNetwork({
+    [REFRESH]: refreshes(clock),
+    [AUTH_DATA]: rouvySessionOpened,
+    [detail(ROUTE_ACTIVITY)]: () => turboStream(payload),
+    [activityFile(ROUTE_ACTIVITY)]: file,
+  });
+  const client = await connect({ credentials: credentials.provider, fetch: network.fetch, clock });
+  return { client, network, clock };
+}
 
 export async function connect(options: Parameters<typeof createServer>[0]) {
   const server = createServer(options);

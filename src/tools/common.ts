@@ -1,5 +1,16 @@
 import type { Aggregates, MinMaxAvg } from "../rouvy/schemas.js";
 
+/** Rouvy's `PP` durations, in order: the power peaks it reports, and the best efforts we look for. */
+export const POWER_PEAKS = [
+  ["5s", 5],
+  ["30s", 30],
+  ["1min", 60],
+  ["5min", 300],
+  ["20min", 1200],
+  ["30min", 1800],
+  ["60min", 3600],
+] as const;
+
 export type DataChannels = Record<"power" | "heart_rate" | "cadence" | "speed", boolean>;
 
 /**

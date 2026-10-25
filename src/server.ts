@@ -10,7 +10,9 @@ import { RouvyError } from "./rouvy/errors.js";
 import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
 import { getActivity } from "./tools/get-activity.js";
+import { InputError } from "./tools/errors.js";
 import { getActivityIntervals } from "./tools/get-activity-intervals.js";
+import { getWindowStats } from "./tools/get-window-stats.js";
 import { listActivities } from "./tools/list-activities.js";
 
 /** Rouvy's Activity id shape: the start as YYMMDDhhmmss, then an 8-character suffix. */
@@ -78,6 +80,23 @@ export function createServer({ credentials, fetch = globalThis.fetch, clock = sy
     (input) => toolResult(() => getActivityIntervals(rouvy, input)),
   );
 
+  server.registerTool(
+    "get_window_stats",
+    {
+      description:
+        "Stats for one stretch of an Activity (e.g. a climb from 20:00 to 35:00), from its per-second Activity " +
+        "file: the same stats as one split of get_activity_intervals, plus the best efforts (peak powers for " +
+        "the durations that fit), the first half vs the second half, and HR:power decoupling between them. " +
+        "%FTP uses the FTP from the Activity snapshot. A note says why any stat is left out.",
+      inputSchema: {
+        activity_id: activityId,
+        start_sec: z.number().int().min(0).describe("Window start, in seconds from the start of the Activity."),
+        end_sec: z.number().int().min(1).describe("Window end, in seconds from the start (after start_sec)."),
+      },
+    },
+    (input) => toolResult(() => getWindowStats(rouvy, input)),
+  );
+
   return server;
 }
 
@@ -86,7 +105,10 @@ async function toolResult(run: () => Promise<unknown>): Promise<CallToolResult> 
     return { content: [{ type: "text", text: JSON.stringify(await run(), null, 2) }] };
   } catch (error) {
     // Only our own messages reach the client: anything else could carry a token or a response body.
-    const message = error instanceof RouvyError ? error.message : "Something went wrong talking to Rouvy. Try later.";
+    const message =
+      error instanceof RouvyError || error instanceof InputError
+        ? error.message
+        : "Something went wrong talking to Rouvy. Try later.";
     return { isError: true, content: [{ type: "text", text: message }] };
   }
 }
