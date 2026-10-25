@@ -1,0 +1,17 @@
+{
+  "name": "rouvy-mcp-host-probe",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway probe for the wayfinder ticket 'Probe Rouvy from candidate hosts'. Never merged.",
+  "scripts": {
+    "node": "tsx node.ts",
+    "build:worker": "node build-worker.mjs",
+    "dev:worker": "node build-worker.mjs && wrangler dev",
+    "deploy:worker": "node build-worker.mjs && wrangler deploy"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "tsx": "4.20.6",
+    "wrangler": "4.42.0"
+  }
+}

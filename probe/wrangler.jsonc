@@ -1,0 +1,10 @@
+{
+  // Throwaway: `wrangler delete` it when the probe is done.
+  "name": "rouvy-mcp-probe",
+  "main": "dist/worker.js",
+  "no_bundle": true,
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "workers_dev": true
+}

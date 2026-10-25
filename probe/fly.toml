@@ -1,0 +1,11 @@
+# Throwaway: `fly apps destroy rouvy-mcp-probe` when the probe is done.
+# Deploy from the repo root: fly deploy -c probe/fly.toml
+app = "rouvy-mcp-probe"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
