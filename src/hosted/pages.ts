@@ -1,6 +1,6 @@
 import type { ConsentDescription } from "@cloudflare/workers-oauth-provider";
 
-const SELF_HOST_URL = "https://github.com/scastiel/rouvy-mcp#self-host-on-cloudflare";
+export const SELF_HOST_URL = "https://github.com/scastiel/rouvy-mcp#self-host-on-cloudflare";
 
 /** Everything a client registered (its name, its domain) is the attacker's choice: escape it. */
 function escape(value: string): string {

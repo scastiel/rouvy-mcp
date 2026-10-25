@@ -5,6 +5,8 @@ main = "src/hosted/worker.ts"
 compatibility_date = "2026-10-01"
 # global_fetch_strictly_public: required for CIMD (the provider refuses to fetch client metadata without it).
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+# The Public instance stays on workers.dev (docs/spec-m2.md §3): never rename the Worker. A self-hosted
+# custom domain's `workers_dev` and `routes` go here, above [vars]: README, "Self-host on Cloudflare".
 
 [vars]
 # This deployment's origin. Its /mcp is the OAuth audience in every connector: never change it

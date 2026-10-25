@@ -22,5 +22,5 @@ The daily canary ([`canary.yml`](../../.github/workflows/canary.yml)) runs M1's 
 1. Turn the sign-in page into a "closed" notice (one redeploy) and add a line to the README.
 2. Email the invited riders. The maintainer keeps a private copy of the invite list outside the Worker for this.
 3. Delete the KV namespace, which removes every Grant and token.
-4. Delete the Worker and its Durable Object, and release the custom domain.
+4. Delete the Worker and its Durable Object.
 5. If Rouvy objected, reply to them confirming it's done.

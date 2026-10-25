@@ -2,7 +2,7 @@
 
 Unofficial Rouvy MCP server.
 
-It reads your own [Rouvy](https://rouvy.com) Activities and serves them to any MCP client (Claude Desktop, Claude Code, Cursor…): list your Activities, read Rouvy's summary of one, and analyse its per-second data (splits, any stretch you pick, downsampled streams). Read-only, local and stdio only. Please read the [disclaimer](#disclaimer) before you use it.
+It reads your own [Rouvy](https://rouvy.com) Activities and serves them to any MCP client (Claude Desktop, Claude Code, Cursor…): list your Activities, read Rouvy's summary of one, and analyse its per-second data (splits, any stretch you pick, downsampled streams). Read-only. It runs locally over stdio, or [self-hosted on Cloudflare](#self-host-on-cloudflare) for web clients such as claude.ai. Please read the [disclaimer](#disclaimer) before you use it.
 
 ## Install
 
@@ -82,6 +82,43 @@ npx -y rouvy-mcp logout   # delete the credentials file
 - Nothing is cached on disk.
 
 If a tool says Rouvy changed its API, update (restart your MCP client: `@latest` picks up the new version) or [open an issue](https://github.com/scastiel/rouvy-mcp/issues).
+
+## Self-host on Cloudflare
+
+The hosted server lets riders connect from a web client such as claude.ai, signing in with their Rouvy email and password on its own page instead of running anything locally. You can run your own, with the same code as the Public instance. This is **best effort, with no support promise**: if you only need it for yourself, the stdio server above costs nothing.
+
+**You are the operator.** Riders hand your instance their Rouvy login, and it keeps their refresh tokens (encrypted) on your Cloudflare account. The duties that come with that (a privacy notice, answering access and erasure requests, shutting down if Rouvy objects) are yours, not the project's. Read [spec-m2 §10](docs/spec-m2.md#10-legal-gdpr-and-rouvy) before you invite anyone.
+
+You need a Cloudflare account on **Workers Paid** ($5/month: tool calls take 57–305 ms of CPU, over the Free plan's 10 ms) and Node.js 22 or later.
+
+1. **Fork the repo** and clone your fork, then `npm ci` and `npx wrangler login`.
+2. **Pick the instance's URL,** `PUBLIC_URL` under `[vars]` in `wrangler.toml`: the bare origin, with no path or trailing slash. Its `/mcp` is the OAuth audience and sits in every rider's connector, so **never change it once riders have connected**: every Grant would stop working. Keep "rouvy" out of the hostname.
+   - **On workers.dev** (what the Public instance does): set `name` to your Worker's name, and `PUBLIC_URL` to `https://<name>.<your-subdomain>.workers.dev`. Then never rename the Worker or your account's workers.dev subdomain.
+   - **On a custom domain** on your Cloudflare account (`mcp.example.org` stands for yours): add these two lines at the top level, above `[vars]`, and set `PUBLIC_URL` to `"https://mcp.example.org"`:
+
+     ```toml
+     workers_dev = false
+     routes = [{ pattern = "mcp.example.org", custom_domain = true }]
+     ```
+
+3. **Create the KV namespace** that holds clients, Grants and tokens, and paste the `id` it prints into `wrangler.toml`'s `[[kv_namespaces]]`:
+
+   ```sh
+   npx wrangler kv namespace create OAUTH_KV
+   ```
+
+   There's nothing to create for the Durable Object: the code puts it in the EU jurisdiction (`RIDERS.jurisdiction("eu")`), and the first deploy creates it.
+4. **Keep both compatibility flags,** `nodejs_compat` and `global_fetch_strictly_public`. Without the second one, the OAuth provider refuses to fetch a client's metadata document, and claude.ai can't connect.
+5. **Set the allow-list,** the Rouvy emails allowed to sign in, separated by commas or whitespace. Anyone else is told the instance is invite-only.
+
+   ```sh
+   npx wrangler secret put ALLOW_LIST
+   ```
+
+6. **Deploy** with `npm run deploy`, which stamps the version, then runs `wrangler deploy`. Check `<PUBLIC_URL>/.well-known/oauth-protected-resource/mcp`: its `resource` is `<PUBLIC_URL>/mcp`.
+7. **Connect:** in claude.ai, add a custom connector with the URL `<PUBLIC_URL>/mcp`, sign in with an allow-listed Rouvy account, and ask for your last Activities.
+
+**Running it:** [docs/operations.md](docs/operations.md) has how long Grants and tokens live, and how to [kill one rider](docs/operations.md#kill-one-rider), which is also how you handle an erasure request. To shut your instance down for good, take the same steps as the Public instance's [Hard stop runbook](docs/runbooks/hard-stop.md), on your own account: close the sign-in page, tell your riders, delete the KV namespace, then the Worker. The repo's daily drift canary only checks the Public instance: watch your own `/health` (it runs the same account-free checks from your Worker's egress, and reports the block signals the runbook acts on).
 
 ## Disclaimer
 

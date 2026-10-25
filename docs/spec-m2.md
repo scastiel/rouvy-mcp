@@ -68,7 +68,7 @@ MCP client ──► Worker front (workers-oauth-provider)
   - The **allow-list** is a Worker secret listing allowed riders' Rouvy emails, edited with `wrangler secret put`.
   - No D1, no Durable Object storage.
 - **Compatibility flags:** `nodejs_compat` and `global_fetch_strictly_public` (the latter is required for CIMD).
-- **Domain:** a custom domain the maintainer owns, **without "rouvy" in the hostname**, picked at build time. Not `*.workers.dev`. The MCP URL is the OAuth audience and sits in every connector config, so **it never changes once riders have connected**.
+- **Domain:** the Worker's own workers.dev hostname, `https://rides-mcp.scastiel.workers.dev/mcp`, **without "rouvy" in it** (the maintainer's call at build time, in place of a custom domain). The MCP URL is the OAuth audience and sits in every connector config, so **it never changes once riders have connected**: the Worker's name and the account's workers.dev subdomain are never renamed. Self-hosters may use a custom domain instead (§11).
 - **Repo layout:** the hosted code lives in `src/hosted/`, with `wrangler.toml` at the root. It is excluded from the npm package (`files`), which stays stdio-only. It deploys only through `wrangler deploy`. One version number, injected into the Worker at build time.
 
 Sources: [Hosting platform and storage for the hosted server](https://github.com/scastiel/rouvymcp/issues/36), [Probe Rouvy from candidate hosts](https://github.com/scastiel/rouvymcp/issues/33), [OAuth authorization server options for a Rouvy-credential login](https://github.com/scastiel/rouvymcp/issues/31), [Assemble the M2 spec](https://github.com/scastiel/rouvymcp/issues/37).
@@ -253,7 +253,7 @@ Sources: [Assemble the M2 spec](https://github.com/scastiel/rouvymcp/issues/37),
 1. Turn the sign-in page into a "closed" notice (one redeploy) and add a line to the README.
 2. Email the invited riders. The maintainer keeps a private copy of the invite list outside the Worker for this.
 3. Delete the KV namespace, which removes every Grant and token.
-4. Delete the Worker and its Durable Object, and release the custom domain.
+4. Delete the Worker and its Durable Object.
 5. If Rouvy objected, reply to them confirming it's done.
 
 Stdio and self-host are unaffected.
@@ -351,7 +351,7 @@ A **"Self-host on Cloudflare"** README section, best effort: the same code as th
 - creating the KV namespace, with the Durable Object in the EU jurisdiction;
 - the `nodejs_compat` and `global_fetch_strictly_public` flags;
 - the allow-list secret (`wrangler secret put`);
-- a custom domain that must **never change once riders have connected**;
+- a URL, on workers.dev or a custom domain, that must **never change once riders have connected**;
 - the kill-one-rider and Hard stop commands (§6, §9).
 
 The self-hoster is the operator, with the operator's duties (§10). Stdio `npx rouvy-mcp` stays the zero-cost option.
@@ -384,7 +384,7 @@ Vertical slices, each usable on its own. Turning them into implementation issues
 4. **Sign-in.** The `/authorize` page, the allow-list, consent, CIMD + DCR. Connected from claude.ai end to end.
 5. **Custody.** Lazy renewal, Grant revocation on terminal errors, one call in flight per rider, idle drop, the kill commands.
 6. **Operations.** Structured logging with invocation logs off, `/health`, the canary workflow change, the runbooks in the repo.
-7. **Self-host README, then deploy the Public instance** on its custom domain.
+7. **Self-host README, then deploy the Public instance** on its workers.dev hostname.
 8. **Legal pages live, then the beta opens.** `/privacy` and the checkbox wording drafted; the Art. 30 record and DPIA in `docs/legal/`; Cloudflare's DPA accepted. Invite the first riders, then send the Rouvy permission request (§10).
 
 ---
