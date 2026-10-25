@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -8,9 +8,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 const repoRoot = new URL("..", import.meta.url).pathname;
 
 /** Starts the built bin as an MCP client would, sends one raw JSON-RPC request and returns the first answer. */
-async function ask(request: Record<string, unknown>) {
+async function ask(request: Record<string, unknown>, binPath = join(repoRoot, "dist/bin.js")) {
   const config = mkdtempSync(join(tmpdir(), "rouvy-mcp-stdio-"));
-  const bin = spawn(process.execPath, [join(repoRoot, "dist/bin.js")], {
+  const bin = spawn(process.execPath, [binPath], {
     env: { ...process.env, XDG_CONFIG_HOME: config, APPDATA: config, ROUVY_MCP_EXPORT_DIR: "" },
     stdio: ["pipe", "pipe", "inherit"],
   });
@@ -57,5 +57,28 @@ describe("the stdio bin", () => {
     expect(answer.error).toBeUndefined();
     expect(answer.result.protocolVersion).toBe("2025-11-25");
     expect(answer.result.serverInfo.name).toBe("rouvy-mcp");
+  });
+
+  it("reports the package version without a package.json beside the build", async () => {
+    // Workers have no package.json to read: the version must be in the build itself. The copy
+    // sits under node_modules so its imports still resolve, with no package.json one level up.
+    const copy = mkdtempSync(join(repoRoot, "node_modules", ".rouvy-mcp-build-"));
+    try {
+      cpSync(join(repoRoot, "dist"), join(copy, "dist"), { recursive: true });
+      const { version } = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as { version: string };
+
+      const answer = await ask(
+        {
+          method: "initialize",
+          params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "test", version: "0.0.0" } },
+        },
+        join(copy, "dist/bin.js"),
+      );
+
+      expect(answer.error).toBeUndefined();
+      expect(answer.result.serverInfo.version).toBe(version);
+    } finally {
+      rmSync(copy, { recursive: true, force: true });
+    }
   });
 });

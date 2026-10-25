@@ -68,7 +68,8 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
       const target = new URL(redirect.redirect, RIDERS);
       if (target.host === "account.rouvy.com" && target.pathname.startsWith("/sign-in")) {
         // Logged out: renew once and retry once. The new Session gets a new cookie jar.
-        if (renewed) throw notLoggedIn();
+        // Logged out again with a fresh Session: Rouvy refusing, not the rider's login dying.
+        if (renewed) throw notLoggedIn({ terminal: false });
         renewed = true;
         followedRedirect = false;
         sessions.invalidate();

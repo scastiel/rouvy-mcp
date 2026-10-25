@@ -30,9 +30,19 @@ const activityId = z
 export interface ServerOptions {
   credentials: CredentialsProvider;
   fetch?: typeof globalThis.fetch;
+  /**
+   * An already-polite fetch from `createPoliteFetch`. Servers given the same one share its queue
+   * and cool-down. Without one, the server builds its own from `fetch`.
+   */
+  politeFetch?: typeof globalThis.fetch;
   clock?: Clock;
   /** Where export_activity_file writes. Without one, the tool isn't registered. */
   storage?: ExportStorage;
+}
+
+/** One request at a time, backing off when Rouvy pushes back, with the honest user agent (spec §7). */
+export function createPoliteFetch(fetch: typeof globalThis.fetch, clock: Clock = systemClock): typeof globalThis.fetch {
+  return withUserAgent(createRequestQueue(createPushback(fetch, clock), clock));
 }
 
 /** The transport-agnostic core: knows nothing about stdio, files or passwords. */
@@ -40,9 +50,9 @@ export function createServer({
   credentials,
   fetch = globalThis.fetch,
   clock = systemClock,
+  politeFetch = createPoliteFetch(fetch, clock),
   storage,
 }: ServerOptions): McpServer {
-  const politeFetch = withUserAgent(createRequestQueue(createPushback(fetch, clock), clock));
   const rouvy = createRouvyClient(politeFetch, createSessionManager(politeFetch, credentials, clock), clock);
   const server = new McpServer({ name: "rouvy-mcp", version: VERSION });
 

@@ -5,7 +5,7 @@ Releases are `0.x` semver, published by [`.github/workflows/release.yml`](../.gi
 ## Every release
 
 1. On `main`, with CI green: run `npm run contract:live` on your machine (it uses your own credentials file; run `npx -y rouvy-mcp login` first if needed). It must pass right before the release.
-2. Bump the version in a PR: `npm version <patch|minor> --no-git-tag-version`, commit `package.json` and `package-lock.json`, merge.
+2. Bump the version in a PR: `npm version <patch|minor> --no-git-tag-version`, commit `package.json`, `package-lock.json` and `src/version.ts` (`npm version` rewrites it: nothing reads `package.json` at runtime), merge.
 3. Tag the merged commit and push the tag:
 
    ```sh

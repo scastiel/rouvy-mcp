@@ -33,7 +33,7 @@ export function createSessionManager(
   // Re-read every time, so a new `login` (even as someone else) applies without a restart.
   async function loadCredentials() {
     const stored = await credentials.load();
-    if (!stored) throw notLoggedIn();
+    if (!stored) throw notLoggedIn({ terminal: true });
     return stored;
   }
 
@@ -46,7 +46,7 @@ export function createSessionManager(
           session = { ...riderSession(renewed), expiresAt: jwtExpiry(renewed.idToken) ?? clock.now() };
         } catch (error) {
           session = undefined;
-          if (error instanceof AuthError) throw notLoggedIn();
+          if (error instanceof AuthError) throw notLoggedIn({ terminal: error.terminal });
           throw error;
         }
       }
