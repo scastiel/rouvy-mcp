@@ -7,6 +7,7 @@ import { withUserAgent } from "./http.js";
 import { createRouvyClient } from "./rouvy/client.js";
 import { systemClock, type Clock } from "./rouvy/clock.js";
 import { RouvyError } from "./rouvy/errors.js";
+import { createPushback } from "./rouvy/pushback.js";
 import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
 import { STREAM_FIELDS } from "./stats/streams.js";
@@ -42,7 +43,7 @@ export function createServer({
   clock = systemClock,
   storage,
 }: ServerOptions): McpServer {
-  const politeFetch = withUserAgent(createRequestQueue(fetch, clock));
+  const politeFetch = withUserAgent(createRequestQueue(createPushback(fetch, clock), clock));
   const rouvy = createRouvyClient(politeFetch, createSessionManager(politeFetch, credentials, clock), clock);
   const server = new McpServer({ name: "rouvy-mcp", version: VERSION });
 

@@ -16,8 +16,21 @@ export function notLoggedIn(): RouvyError {
   );
 }
 
-export function rouvyUnavailable(status: number): RouvyError {
-  return new RouvyError(`Rouvy is unavailable right now (HTTP ${status}). Try later.`);
+/** A 5xx (with its status) or a network error (without one). */
+export function rouvyUnavailable(status?: number): RouvyError {
+  const detail = status === undefined ? "it can't be reached" : `HTTP ${status}`;
+  return new RouvyError(`Rouvy is unavailable right now (${detail}). Try later.`);
+}
+
+export function blockedByBotProtection(until: number): RouvyError {
+  const at = new Date(until).toISOString().slice(11, 16);
+  return new RouvyError(
+    `Request blocked by Rouvy's bot protection. Try again after ${at} UTC; report it at ${ISSUES_URL} if it persists.`,
+  );
+}
+
+export function rateLimited(seconds: number): RouvyError {
+  return new RouvyError(`Rouvy rate limited this server. Try again in ${Math.max(1, seconds)} s.`);
 }
 
 export function activityNotFound(): RouvyError {
