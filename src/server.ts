@@ -10,8 +10,10 @@ import { RouvyError } from "./rouvy/errors.js";
 import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
 import { STREAM_FIELDS } from "./stats/streams.js";
+import type { ExportStorage } from "./storage/types.js";
 import { getActivity } from "./tools/get-activity.js";
 import { InputError } from "./tools/errors.js";
+import { EXPORT_FORMATS, exportActivityFile } from "./tools/export-activity-file.js";
 import { getActivityIntervals } from "./tools/get-activity-intervals.js";
 import { getActivityStreams, MAX_STREAM_POINTS } from "./tools/get-activity-streams.js";
 import { getWindowStats } from "./tools/get-window-stats.js";
@@ -29,10 +31,17 @@ export interface ServerOptions {
   credentials: CredentialsProvider;
   fetch?: typeof globalThis.fetch;
   clock?: Clock;
+  /** Where export_activity_file writes. Without one, the tool isn't registered. */
+  storage?: ExportStorage;
 }
 
 /** The transport-agnostic core: knows nothing about stdio, files or passwords. */
-export function createServer({ credentials, fetch = globalThis.fetch, clock = systemClock }: ServerOptions): McpServer {
+export function createServer({
+  credentials,
+  fetch = globalThis.fetch,
+  clock = systemClock,
+  storage,
+}: ServerOptions): McpServer {
   const politeFetch = withUserAgent(createRequestQueue(fetch, clock));
   const rouvy = createRouvyClient(politeFetch, createSessionManager(politeFetch, credentials, clock), clock);
   const server = new McpServer({ name: "rouvy-mcp", version: VERSION });
@@ -128,6 +137,23 @@ export function createServer({ credentials, fetch = globalThis.fetch, clock = sy
     },
     (input) => toolResult(() => getActivityStreams(rouvy, input)),
   );
+
+  if (storage) {
+    server.registerTool(
+      "export_activity_file",
+      {
+        description:
+          "Save one Activity to the rider's export folder: its Activity file as downloaded from Rouvy (fit), or " +
+          "its per-second records as CSV (csv). Overwrites an earlier export of the same Activity and returns " +
+          "the file's absolute path.",
+        inputSchema: {
+          activity_id: activityId,
+          format: z.enum(EXPORT_FORMATS).default("csv").describe("fit: the Activity file; csv: per-second records."),
+        },
+      },
+      (input) => toolResult(() => exportActivityFile(rouvy, storage, input)),
+    );
+  }
 
   return server;
 }

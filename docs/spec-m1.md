@@ -168,6 +168,7 @@ Shared conventions:
 - **Input:** `activity_id`, `format` (`fit` | `csv`, default `csv`).
 - **Behaviour:** creates the folder if missing, writes `<activityId>.fit` (the Activity file as downloaded) or `<activityId>.csv` (per-second records) with **0600** permissions, overwrites an existing file, and returns the absolute path. No default folder.
 - This is the only thing M1 writes to disk besides the credentials file, and only on explicit request.
+- **Built ([#21](https://github.com/scastiel/rouvymcp/issues/21)):** the FIT export is the bytes the analysis tools parsed, kept with the parsed file in the Activity file LRU, so exporting a ride already analysed costs no request. Each file is written to a 0600 temp file and renamed into place, so an overwrite never keeps an older file's looser permissions. The CSV has one row per record, with columns `sec,timestamp,power,heart_rate,cadence,speed,altitude,distance,position_lat,position_long` (units as in `get_activity_streams`, positions in degrees). A reading the file lacks is an empty cell. Values are rounded to FIT's own resolution per field to strip scaling noise. A relative `ROUVY_MCP_EXPORT_DIR` leaves the tool off, with a line on stderr: it would depend on where the MCP client starts the server.
 
 ### Stats definitions (§5.3–5.5)
 
