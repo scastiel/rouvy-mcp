@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs";
+import type { ToolCall } from "../src/server.js";
 import type { RecordedRequest } from "./fakes.js";
 import {
+  AUTH_DATA,
+  connect,
+  fakeClock,
+  fakeNetwork,
+  memoryCredentials,
+  REFRESH,
+  refreshes,
+  rouvySessionOpened,
   turboStream,
   WORKOUT_DETAIL_ROUTE,
   WORKOUT_LIST_ROUTE,
@@ -61,7 +70,10 @@ export async function fakeWorkoutLibrary({
       // Rouvy keeps a Workout's tags when an edit sends none.
       trainingEffects: tags.length === 0 && previous ? previous.workout.trainingEffects : tags,
       access: form.get("access"),
-      recommendedRoute: { id: routeId, name: `Route ${routeId}`, thumbnail: "https://example.invalid/route.png" },
+      recommendedRoute:
+        previous?.workout.recommendedRoute?.id === routeId
+          ? previous.workout.recommendedRoute
+          : { id: routeId, name: `Route ${routeId}`, thumbnail: "https://example.invalid/route.png" },
       segments: segments.map(({ primaryStart, primaryEnd, primaryType, ...rest }) => ({
         ...rest,
         type: primaryType,
@@ -144,3 +156,26 @@ export async function fakeWorkoutLibrary({
     },
   };
 }
+
+/** A logged-in rider (uid-1) connected to a fake Workout library; `intercept` answers a request first. */
+export async function libraryRider(intercept?: (request: RecordedRequest) => Response | undefined) {
+  const clock = fakeClock();
+  const library = await fakeWorkoutLibrary({ intercept });
+  const network = fakeNetwork(library.routes({ [REFRESH]: refreshes(clock), [AUTH_DATA]: rouvySessionOpened }));
+  const calls: ToolCall[] = [];
+  const client = await connect({
+    credentials: memoryCredentials({ refreshToken: "refresh-for-uid-1", uid: "uid-1" }).provider,
+    fetch: network.fetch,
+    clock,
+    onToolCall: (call) => calls.push(call),
+  });
+  /** Every riders.rouvy.com request so far, as `METHOD /path`. */
+  const rouvy = () =>
+    network.requests.filter((r) => r.url.host === "riders.rouvy.com").map((r) => `${r.method} ${r.url.pathname}`);
+  const posts = () => network.requests.filter((r) => r.method === "POST" && r.url.host === "riders.rouvy.com");
+  return { client, network, library, calls, rouvy, posts };
+}
+
+/** Matches a POST to `path`, for `intercept`. */
+export const isPost = (path: string) => (request: RecordedRequest) =>
+  request.method === "POST" && request.url.pathname === path;

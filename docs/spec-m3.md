@@ -96,6 +96,9 @@ Five tools, following spec-m1 §5's conventions: snake_case names, JSON text res
 - **Only owned Workouts** are ever listed, returned or written (§6.3). The owner is never exposed.
 - **`rider_ftp_w`:** the rider's **current** FTP in watts, as Rouvy reports it on the Workout (`userMetrics.userFtp`), so Claude can turn "250 W" into % FTP. This is the one place current Rider settings are used. Activities still use their Activity snapshot only (spec-m1 §5).
 - **Update semantics:** `steps`, when given, replace all Steps. Every other field that is left out (including `cues`) keeps its current value, taken from the read just before the write. The route is always kept. **Last write wins**: there is no concurrency guard, because Rouvy keeps no version to compare against.
+  - **Tags can't be cleared** (§3): `tags: []` on a Workout that has tags is an input error ("give the tags to keep, or leave tags out"), sent before any POST, rather than a write Rouvy would silently ignore.
+  - **Validation runs twice:** the given fields alone, before any request, and then the merged Workout, once the read has shown the real total for the Cues.
+  - A Workout without a route (never seen) gets the creator's default route.
 - **Route on create:** `route_id` when given; otherwise the creator's default route (§3). `route_id` accepts any id Claude saw on another Workout through `get_workout`.
 - **Descriptions** of `update_workout` and `delete_workout` warn that a Workout synced from another app (TrainingPeaks, Intervals.icu…) may be overwritten by that app's next sync.
 
