@@ -63,7 +63,7 @@ export function signInPage({
     : "";
   return page(
     "Sign in to Rouvy",
-    `<h1>${client} wants to read your Rouvy rides</h1>
+    `<h1>${client} wants to read your Rouvy rides and manage your Workouts</h1>
 <p>Access will be sent to <strong>${escape(details.redirectHost)}</strong>.</p>
 <p>Unofficial, not affiliated with Rouvy. Run by ${escape(operator.name)}.</p>
 ${notice}
@@ -74,7 +74,7 @@ ${notice}
   <label for="password">Rouvy password</label>
   <input id="password" name="password" type="password" autocomplete="current-password" required>
   <label class="consent"><input name="accept_risk" type="checkbox" required>
-    <span>I'm connecting my own Rouvy account at my own risk. Rouvy's terms (§7.c, §14.a.vi) may not allow access like this, and Rouvy could restrict or close my account. I accept the Hard stop: if Rouvy objects to or blocks this instance, it shuts down and deletes every connection within 24 hours.</span></label>
+    <span>I'm connecting my own Rouvy account at my own risk. I let my MCP client read my rides, and create, change and delete my own Rouvy Workouts when I ask it to. Rouvy's terms (§7.c, §14.a.vi) may not allow access like this, and Rouvy could restrict or close my account. I accept the Hard stop: if Rouvy objects to or blocks this instance, it shuts down and deletes every connection within 24 hours.</span></label>
   <label class="consent"><input name="consent_health" type="checkbox" required>
     <span>I give my explicit consent (GDPR Art. 9(2)(a)) to this instance processing my ride data, which includes health data such as heart rate, only to answer my MCP client, as the privacy notice describes.</span></label>
   <button type="submit" name="action" value="connect">Connect</button>
@@ -104,18 +104,19 @@ export function privacyPage(operator: Operator): Response {
 <h2>2. Person in charge under Québec's Law 25</h2>
 <p>The operator is established in Québec. ${name} is the person in charge of the protection of personal information, reachable at the same address.</p>
 <h2>3. What it's for</h2>
-<p>One purpose only: reading your own Rouvy rides so that the MCP client you connected (claude.ai, for example) can answer your questions about them. To do that, the instance handles:</p>
+<p>Two purposes, both for the MCP client you connected (claude.ai, for example): reading your own Rouvy rides so that it can answer your questions about them, and managing your own Rouvy Workouts (the training plans in your library) when you ask it to: reading, creating, changing and deleting them. To do that, the instance handles:</p>
 <ul>
   <li><strong>your Rouvy email and password</strong>, once, when you sign in. The password goes to Rouvy's sign-in service (Google Firebase) and is then discarded, never stored or logged;</li>
   <li><strong>your Rouvy refresh token and email</strong>, kept encrypted with each connection (Grant), and your Rouvy account id, which labels it, so the instance can sign in to Rouvy for you while it answers your client;</li>
-  <li><strong>your ride data</strong>, read from Rouvy when your client asks: Activities with their power, cadence, speed and heart rate, and the rider settings Rouvy keeps with them (weight, FTP, zones). Heart rate, and arguably weight, are health data. It is only passed on to your client.</li>
+  <li><strong>your ride data</strong>, read from Rouvy when your client asks: Activities with their power, cadence, speed and heart rate, and the rider settings Rouvy keeps with them (weight, FTP, zones). Heart rate, and arguably weight, are health data. It is only passed on to your client;</li>
+  <li><strong>your Workouts</strong>: their names, descriptions, Steps, cues and tags, and your current FTP as Rouvy shows it with them. They are read from Rouvy when your client asks, and written to Rouvy only when you ask your client to create, change or delete one. Only Workouts you created yourself are ever read back or written.</li>
 </ul>
 <h2>4. Legal basis</h2>
 <p>Your consent, GDPR Art. 6(1)(a), and for heart rate and other health data your explicit consent, Art. 9(2)(a). You give both with the two boxes on the sign-in page, every time you connect. You can withdraw them at any time by disconnecting (section 8); that doesn't affect what was done before.</p>
 <h2>5. Who receives your data</h2>
 <ul>
   <li><strong>Cloudflare</strong>, which hosts the instance, as processor under its data processing agreement.</li>
-  <li><strong>Rouvy</strong> is the source: the instance signs in to your Rouvy account and reads from it, read-only. Rouvy sees these requests coming from this instance.</li>
+  <li><strong>Rouvy</strong> is the source: the instance signs in to your Rouvy account, which is read from and, on your request, written to (your own Workouts only). Nothing else in your account is ever changed. Rouvy sees these requests coming from this instance.</li>
   <li><strong>Your MCP client</strong> receives your ride data because you asked it to; what it does with it is between you and its provider.</li>
 </ul>
 <p>Nothing is sold or shared with anyone else.</p>
@@ -125,7 +126,7 @@ export function privacyPage(operator: Operator): Response {
 <ul>
   <li><strong>Connections (Grants)</strong>, with your encrypted refresh token and email, and your account id: deleted after 30 days without use.</li>
   <li><strong>Logs</strong>: kept 7 days. They hold tool names, outcomes, durations and status codes, and the sign-in library's error lines, which name apps, not riders. Never your email, account id, IP address or tokens.</li>
-  <li><strong>Ride data and your Rouvy session</strong>: in memory only, dropped after 30 minutes idle. No ride data is stored.</li>
+  <li><strong>Ride data, Workouts and your Rouvy session</strong>: in memory only, dropped after 30 minutes idle (your list of Workouts after a minute). No ride data is stored, nor any Workout: the Workouts you create live in your Rouvy library.</li>
 </ul>
 <h2>8. Your rights, and how to disconnect</h2>
 <p>You have the right to access, correct and erase your data, to restrict or object to its processing, and to data portability. Withdrawing consent means disconnecting, in any of three ways:</p>

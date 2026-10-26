@@ -74,7 +74,8 @@ export function hostedWorker({
   allowList,
   routes = {},
   operator = OPERATOR,
-}: { allowList?: string; routes?: Routes; operator?: Operator } = {}) {
+  consentVersion,
+}: { allowList?: string; routes?: Routes; operator?: Operator; consentVersion?: number } = {}) {
   const clock = fakeClock();
   const allRoutes: Routes = { [REFRESH]: refreshesAnySignIn(clock), [AUTH_DATA]: rouvySessionOpened, ...routes };
   const network = fakeNetwork(allRoutes);
@@ -96,8 +97,9 @@ export function hostedWorker({
   };
   const host = createRidersHost({ fetch: timedFetch, clock, log, store });
   const jurisdictions: string[] = [];
-  // How many `/mcp` requests the Worker has handed to the Durable Object so far.
+  // How many `/mcp` requests the Worker has handed to the Durable Object so far, and with what props.
   let delivered = 0;
+  const servedProps: GrantProps[] = [];
   const env = {
     OAUTH_KV: kv,
     PUBLIC_URL: ORIGIN,
@@ -112,6 +114,7 @@ export function hostedWorker({
           get: () => ({
             serve(request: Request, props: GrantProps) {
               delivered++;
+              servedProps.push(props);
               return host.serve(request, props);
             },
             health: () => host.health(),
@@ -121,7 +124,7 @@ export function hostedWorker({
       },
     },
   };
-  const worker = createWorker({ fetch: timedFetch, log });
+  let worker = createWorker({ fetch: timedFetch, log, consentVersion });
   // Work the Worker hands to `waitUntil`, settled before a test reads what it did.
   const pending: Promise<unknown>[] = [];
   const ctx = { waitUntil: (promise: Promise<unknown>) => void pending.push(promise), passThroughOnException() {}, props: {} };
@@ -148,6 +151,12 @@ export function hostedWorker({
     clockReadings,
     reachedDurableObject,
     refreshTokenRotations: () => host.refreshTokenRotations(),
+    /** The Grant props each `/mcp` request reached the Durable Object with. */
+    servedProps,
+    /** A new build over the same KV and Durable Object: Grants made before it meet its consent version. */
+    redeploy({ consentVersion: next }: { consentVersion?: number }) {
+      worker = createWorker({ fetch: timedFetch, log, consentVersion: next });
+    },
     logs,
     /** The events logged so far, parsed. */
     events: () => logs.map((line) => JSON.parse(line) as LogEvent),

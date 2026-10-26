@@ -15,8 +15,11 @@ export type LogEvent =
   | { event: "cool_down"; reason: CoolDown["reason"]; seconds: number }
   | { event: "block_signal"; kind: BlockSignal }
   | { event: "grant_created" }
-  /** `client`: the client revoked its token. `terminal_auth_failure`: Firebase ended the rider's login. */
-  | { event: "grant_revoked"; reason: "client" | "terminal_auth_failure" }
+  /**
+   * `client`: the client revoked its token. `terminal_auth_failure`: Firebase ended the rider's login.
+   * `consent_outdated`: the Grant predates the current consent wording (spec-m3 §9).
+   */
+  | { event: "grant_revoked"; reason: "client" | "terminal_auth_failure" | "consent_outdated" }
   | { event: "refresh_token_rotated"; rotations: number }
   /**
    * The Durable Object started, with no rider in memory. Other than right after a deploy, this

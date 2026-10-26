@@ -10,13 +10,14 @@ Health data (heart rate) is processed, and riders hand over credentials to a thi
 
 ## What is assessed
 
-The processing described in the [record of processing](record-of-processing.md): reading an invited rider's own Rouvy rides for their MCP client. Three steps carry the risk:
+The processing described in the [record of processing](record-of-processing.md): reading an invited rider's own Rouvy rides for their MCP client, and managing their own Rouvy Workouts on their request. Four steps carry the risk:
 
 1. **Credential handover:** the rider types their Rouvy email and password on our sign-in page.
 2. **Token custody:** the instance keeps the rider's Rouvy refresh token for up to 30 days of disuse.
 3. **Egress to Rouvy:** the instance signs in to Rouvy and reads from its private API on the rider's behalf, from one shared Cloudflare egress.
+4. **Writes to Rouvy:** on the rider's request, the instance creates, changes or deletes Workouts in the rider's own Rouvy library, through the routes Rouvy's web app uses.
 
-**Necessity and proportionality.** Rouvy has no public API or OAuth for third parties, so a sign-in on the rider's behalf is the only way to offer this to riders who can't run the stdio server. The data kept is the minimum that makes it work: one encrypted refresh token, the uid it belongs to, and the email the allow-list is checked against. Ride data is never stored. Riders who'd rather not hand over credentials can run `npx rouvy-mcp` locally, or host their own.
+**Necessity and proportionality.** Rouvy has no public API or OAuth for third parties, so a sign-in on the rider's behalf is the only way to offer this to riders who can't run the stdio server. The data kept is the minimum that makes it work: one encrypted refresh token, the uid it belongs to, and the email the allow-list is checked against. Ride data and Workouts are never stored; the only writes are to the rider's own Workouts, which they asked for. Riders who'd rather not hand over credentials can run `npx rouvy-mcp` locally, or host their own.
 
 ## Risks and measures
 
@@ -44,16 +45,26 @@ Likelihood and severity are rated low, medium or high, **after** the measures.
 
 | Risk | Measures | Residual |
 |---|---|---|
-| Rouvy restricts riders' accounts because of the instance's traffic. | Read-only; the politeness charter across the whole instance (one queue, 1 s between requests, a shared cool-down); an honest user agent and our own `CF-Worker` zone, so Rouvy can recognise and block us; written permission requested. | Medium: Rouvy's terms decide. |
+| Rouvy restricts riders' accounts because of the instance's traffic. | Reads, plus writes to the rider's own Workouts only on request; the politeness charter across the whole instance (one queue, 1 s between requests, a shared cool-down); an honest user agent and our own `CF-Worker` zone, so Rouvy can recognise and block us; written permission requested. | Medium: Rouvy's terms decide. |
 | Rouvy objects or blocks, and riders' access breaks in a way that harms them. | The **Hard stop**: within 24 h the instance closes, every Grant is deleted and riders are emailed ([runbook](../runbooks/hard-stop.md)). No evasion: no IP rotation, no disguised UA, no host moves. | Low |
 | Ride data (health data) is kept or reused. | In memory only, dropped after 30 minutes idle; never logged; only used for what the rider asked (the Data Act Art. 6 duties, which `/privacy` commits to). | Low |
+
+### 4. Writes to Rouvy
+
+| Risk | Measures | Residual |
+|---|---|---|
+| **A Workout is overwritten or deleted by mistake.** | Writes happen only on a tool call the rider asked for. `update_workout` and `delete_workout` carry `destructiveHint`, so clients ask before running them. The ownership check: a Workout is written only if it's in the rider's own library **and** created by their account, otherwise it's "not found". A delete is confirmed against a fresh library list. Rouvy keeps deleted Workouts readable by their id. | Low |
+| The instance writes something other than the rider's own Workouts. | The write allow-list: every request other than a GET is refused before it leaves unless it's one of the three Workout write routes (or sign-in), pinned by a test. Activities, Rider settings and the profile stay read-only by construction. | Low |
+| A failed write is sent twice and duplicates a Workout. | A write is never retried. If Rouvy fails mid-write, the rider is told the outcome is unknown and to check their Workouts first. | Low |
+| A Workout synced from another app (TrainingPeaks, Intervals.icu…) is changed here, then overwritten by that app's next sync. | The tool descriptions warn about it. The rider's other app stays the source of truth for its own Workouts. | Low |
+| The rider consented under the read-only wording. | The sign-in checkbox now covers Workout writes. Every Grant given under the older wording is ended on its next request, so the rider reconnects once and sees the new wording (`consentVersion`, [spec-m3 §9](../spec-m3.md#9-hosted-server)). | Low |
 
 ## Law 25, s. 17: information leaving Québec
 
 The operator is in Québec. Riders' information is held by Cloudflare: the Durable Object that handles ride data in the EU, the Worker front (sign-in, token checks) at the edge location nearest the rider, and the Grants in KV, globally.
 
-- **Sensitivity:** the refresh token gives read access to a rider's rides; ride data includes health data. Both are sensitive.
-- **Purpose:** only reading the rider's own rides for their client, at their request.
+- **Sensitivity:** the refresh token gives access to a rider's Rouvy account, which the instance uses only to read their rides and Workouts and to write their own Workouts; ride data includes health data. Both are sensitive.
+- **Purpose:** only reading the rider's own rides, and managing their own Workouts, for their client, at their request.
 - **Protection:** the measures above; Cloudflare as processor under its DPA, with its security certifications (ISO 27001, SOC 2); the token encrypted at rest with no key held by anyone but the rider's client.
 - **Legal regime where it goes:** the EU, under GDPR; elsewhere in Cloudflare's network, covered by its DPA and standard contractual clauses.
 

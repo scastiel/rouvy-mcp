@@ -184,6 +184,20 @@ describe("consent on the sign-in page", () => {
     expect(label("consent_health")).toContain("GDPR Art. 9(2)(a)");
   });
 
+  it("covers Workout writes in the risk box, still required and never pre-ticked (spec-m3 §9)", async () => {
+    const worker = hostedWorker();
+    const { page } = await openSignIn(worker, await registerClient(worker));
+
+    const html = await page.text();
+
+    expect(html).toContain("wants to read your Rouvy rides and manage your Workouts");
+    expect(html).toContain('<input name="accept_risk" type="checkbox" required>');
+    expect(html).not.toMatch(/checked/);
+    expect(/<input name="accept_risk"[^>]*>\s*<span>(.*?)<\/span>/s.exec(html)?.[1]).toContain(
+      "create, change and delete my own Rouvy Workouts when I ask",
+    );
+  });
+
   it("says who runs the instance the rider is handing their Rouvy login to", async () => {
     const worker = hostedWorker();
     const { page } = await openSignIn(worker, await registerClient(worker));
@@ -281,6 +295,14 @@ describe("the privacy notice", () => {
     ]) {
       expect(html).toContain(fact);
     }
+  });
+
+  it("says Rouvy is written to on request, for the rider's own Workouts only, and nowhere 'read-only'", async () => {
+    const html = await (await hostedWorker().fetch("/privacy")).text();
+
+    expect(html).toContain("read from and, on your request, written to (your own Workouts only)");
+    expect(html).toContain("managing your own Rouvy Workouts");
+    expect(html).not.toMatch(/read-only/i);
   });
 
   it("lists the three ways to disconnect, and erasure on request", async () => {
@@ -520,6 +542,60 @@ function shortLivedIdTokens(worker: HostedWorker, refreshToken: (presented: stri
     return json({ id_token: fakeIdToken("uid-1", worker.clock.now() + 10 * 60_000), refresh_token: answer, user_id: "uid-1" });
   };
 }
+
+describe("the Workout consent (spec-m3 §9)", () => {
+  it("is recorded in every new Grant as consentVersion 2", async () => {
+    const worker = workerWithRider();
+    const token = await connectRider(worker, RIDER);
+
+    await listActivities(worker, token);
+
+    expect(worker.servedProps.at(-1)?.consentVersion).toBe(2);
+  });
+
+  it("ends a Grant given under older wording on its next request; the next OAuth run makes a fresh one", async () => {
+    const worker = hostedWorker({
+      allowList: RIDER,
+      routes: { [SIGN_IN]: signedIn("uid-1", RIDER), [LIST]: () => listPage([activityRow("a00")]) },
+      consentVersion: 1,
+    });
+    const old = await connect(worker, RIDER);
+    expect((await listActivities(worker, old.accessToken)).status).toBe(200);
+    const served = worker.servedProps.length;
+
+    worker.redeploy({ consentVersion: 2 });
+    const response = await listActivities(worker, old.accessToken);
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain("resource_metadata=");
+    expect(worker.servedProps).toHaveLength(served);
+    const refreshed = await refresh(worker, old);
+    expect(refreshed.status).toBe(400);
+    expect(await refreshed.json()).toMatchObject({ error: "invalid_grant" });
+
+    const fresh = await connect(worker, RIDER);
+    expect((await listActivities(worker, fresh.accessToken)).status).toBe(200);
+    expect(worker.servedProps.at(-1)?.consentVersion).toBe(2);
+  });
+
+  it("logs the revocation with its reason only: no uid, email, token or props", async () => {
+    const worker = hostedWorker({
+      allowList: RIDER,
+      routes: { [SIGN_IN]: signedIn("uid-1", RIDER), [LIST]: () => listPage([activityRow("a00")]) },
+      consentVersion: 1,
+    });
+    const old = await connect(worker, RIDER);
+    worker.redeploy({ consentVersion: 2 });
+
+    await listActivities(worker, old.accessToken);
+
+    expect(worker.events()).toContainEqual({ event: "grant_revoked", reason: "consent_outdated" });
+    const logged = worker.logs.join("\n");
+    for (const secret of ["uid-1", RIDER, old.accessToken, old.accessToken.split(":")[1]!, "refresh-for", "consentVersion"]) {
+      expect(logged).not.toContain(secret);
+    }
+  });
+});
 
 describe("a Grant", () => {
   it.each(["INVALID_REFRESH_TOKEN", "TOKEN_EXPIRED", "USER_NOT_FOUND", "USER_DISABLED"])(

@@ -2,6 +2,7 @@ import OAuthProvider, { getOAuthApi, type OAuthHelpers, type OAuthProviderOption
 import { DurableObject } from "cloudflare:workers";
 import { withUserAgent } from "../http.js";
 import { authorize } from "./authorize.js";
+import { CONSENT_VERSION, consentIsCurrent } from "./consent.js";
 import { consoleLog, type BlockSignal, type Log } from "./log.js";
 import { privacyPage, type Operator } from "./pages.js";
 import { observeUpstream } from "./upstream.js";
@@ -58,17 +59,24 @@ function riders(env: Env): Pick<RidersHost, "serve" | "recordBlockSignal" | "hea
 }
 
 /**
- * Firebase ended the rider's login (spec-m2 §6): revoke the Grant of the token presented, so the
- * client's refresh gets `invalid_grant` and sends the rider back to the sign-in page.
+ * Revoke the Grant of the token presented, so the client's refresh gets `invalid_grant` and sends
+ * the rider back to the sign-in page: when Firebase ended the rider's login (spec-m2 §6), or when
+ * the Grant predates the current consent wording (spec-m3 §9).
  */
-async function endGrant(request: Request, oauth: OAuthHelpers, publicUrl: string, log: Log): Promise<Response> {
+async function endGrant(
+  request: Request,
+  oauth: OAuthHelpers,
+  publicUrl: string,
+  log: Log,
+  reason: "terminal_auth_failure" | "consent_outdated",
+): Promise<Response> {
   // The provider's tokens are `{userId}:{grantId}:{secret}`, and it has just validated this one.
   const token = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1] ?? "";
   const [userId, grantId] = token.split(":");
   try {
     if (userId && grantId) {
       await oauth.revokeGrant(grantId, userId);
-      log({ event: "grant_revoked", reason: "terminal_auth_failure" });
+      log({ event: "grant_revoked", reason });
     }
   } catch {
     // Still a 401: the Grant lives on, so its next call meets the same Firebase answer and tries again.
@@ -80,16 +88,21 @@ async function endGrant(request: Request, oauth: OAuthHelpers, publicUrl: string
   });
 }
 
-function createProvider(publicUrl: string, fetch: typeof globalThis.fetch, log: Log) {
+function createProvider(publicUrl: string, fetch: typeof globalThis.fetch, log: Log, consentVersion: number) {
   const options: OAuthProviderOptions<Env> = {
     apiRoute: "/mcp",
     apiHandler: {
       async fetch(request, env, ctx) {
         // Stateless Streamable HTTP: no session to GET or DELETE (spec-m2 §4).
         if (request.method !== "POST") return new Response(null, { status: 405, headers: { allow: "POST" } });
-        const served = await riders(env).serve(request, ctx.props as GrantProps);
+        const props = ctx.props as GrantProps;
+        // Given under older wording: the rider reconnects once and sees the current one (spec-m3 §9).
+        if (!consentIsCurrent(props, consentVersion)) {
+          return endGrant(request, getOAuthApi(options, env), publicUrl, log, "consent_outdated");
+        }
+        const served = await riders(env).serve(request, props);
         if ("response" in served) return served.response;
-        return endGrant(request, getOAuthApi(options, env), publicUrl, log);
+        return endGrant(request, getOAuthApi(options, env), publicUrl, log, "terminal_auth_failure");
       },
     },
     defaultHandler: {
@@ -99,7 +112,14 @@ function createProvider(publicUrl: string, fetch: typeof globalThis.fetch, log: 
           // The sign-in page's Rouvy check can meet a block too: the Durable Object counts it.
           const onBlockSignal = (kind: BlockSignal) => ctx.waitUntil(riders(env).recordBlockSignal(kind));
           const observed = withUserAgent(observeUpstream(fetch, { log, onBlockSignal }));
-          return authorize(request, { oauth: env.OAUTH_PROVIDER!, allowList: env.ALLOW_LIST, fetch: observed, log, operator: operator(env) });
+          return authorize(request, {
+            oauth: env.OAUTH_PROVIDER!,
+            allowList: env.ALLOW_LIST,
+            fetch: observed,
+            log,
+            operator: operator(env),
+            consentVersion,
+          });
         }
         if (pathname === "/privacy") return privacyPage(operator(env));
         if (pathname === "/health" && request.method === "GET") {
@@ -128,12 +148,13 @@ function createProvider(publicUrl: string, fetch: typeof globalThis.fetch, log: 
 export function createWorker({
   fetch = (input, init) => globalThis.fetch(input, init),
   log = consoleLog,
-}: { fetch?: typeof globalThis.fetch; log?: Log } = {}) {
+  consentVersion = CONSENT_VERSION,
+}: { fetch?: typeof globalThis.fetch; log?: Log; consentVersion?: number } = {}) {
   let provider: { publicUrl: string; instance: ReturnType<typeof createProvider> } | undefined;
   return {
     fetch(request, env, ctx) {
       if (provider?.publicUrl !== env.PUBLIC_URL) {
-        provider = { publicUrl: env.PUBLIC_URL, instance: createProvider(env.PUBLIC_URL, fetch, log) };
+        provider = { publicUrl: env.PUBLIC_URL, instance: createProvider(env.PUBLIC_URL, fetch, log, consentVersion) };
       }
       if (!atTokenEndpoint(request)) return provider.instance.fetch(request, env, ctx);
       return logClientRevocation(request, (forwarded) => provider!.instance.fetch(forwarded, env, ctx), log);
