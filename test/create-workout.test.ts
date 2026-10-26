@@ -1,40 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ToolCall } from "../src/server.js";
-import type { RecordedRequest } from "./fakes.js";
-import {
-  AUTH_DATA,
-  connect,
-  fakeClock,
-  fakeNetwork,
-  loggedOut,
-  memoryCredentials,
-  REFRESH,
-  refreshes,
-  rouvySessionOpened,
-  text,
-} from "./server-harness.js";
-import { DEFAULT_ROUTE, fakeWorkoutLibrary, fixtureRejectedPage } from "./workout-library.js";
+import { loggedOut, text } from "./server-harness.js";
+import { DEFAULT_ROUTE, fixtureRejectedPage, isPost, libraryRider as rider } from "./workout-library.js";
 
 const NEW_ID = "100777";
-
-/** A logged-in rider with a fake Rouvy Workout library; `intercept` answers a request first. */
-async function rider(intercept?: (request: RecordedRequest) => Response | undefined) {
-  const clock = fakeClock();
-  const library = await fakeWorkoutLibrary({ intercept });
-  const network = fakeNetwork(library.routes({ [REFRESH]: refreshes(clock), [AUTH_DATA]: rouvySessionOpened }));
-  const calls: ToolCall[] = [];
-  const client = await connect({
-    credentials: memoryCredentials({ refreshToken: "refresh-for-uid-1", uid: "uid-1" }).provider,
-    fetch: network.fetch,
-    clock,
-    onToolCall: (call) => calls.push(call),
-  });
-  const rouvy = () => network.requests.filter((r) => r.url.host === "riders.rouvy.com").map((r) => `${r.method} ${r.url.pathname}`);
-  const posts = () => network.requests.filter((r) => r.method === "POST" && r.url.host === "riders.rouvy.com");
-  return { client, network, library, calls, rouvy, posts };
-}
-
-const isPost = (path: string) => (request: RecordedRequest) => request.method === "POST" && request.url.pathname === path;
 
 const INTERVALS = {
   name: "4×4 VO2",

@@ -25,6 +25,11 @@ export interface WorkoutForm {
 export interface WorkoutWriter {
   /** Creates a Workout on `routeId`, or on the creator's default route. */
   create(form: WorkoutForm, routeId?: string): Promise<WorkoutDetail>;
+  /**
+   * Replaces an owned Workout with the form `edit` builds from its current state, read just before.
+   * The route is always kept. Last write wins: Rouvy keeps no version to compare against.
+   */
+  update(workoutId: string, edit: (current: WorkoutDetail) => WorkoutForm): Promise<WorkoutDetail>;
 }
 
 export function createWorkoutWriter(
@@ -53,12 +58,12 @@ export function createWorkoutWriter(
     }
   }
 
-  /** A form post: success is a 3xx to `/workouts/<digits>`, which is returned. */
-  async function submit(path: string, form: WorkoutForm, routeId: string): Promise<string> {
+  /** A form post: success is a 3xx to `/workouts/<digits>` (to `expectedId` on an edit), which is returned. */
+  async function submit(path: string, form: WorkoutForm, routeId: string, expectedId?: string): Promise<string> {
     const response = await post(path, encodeForm(form, routeId));
     if (response.status >= 300 && response.status < 400) {
       const id = workoutIdIn(response.headers.get("location"));
-      if (id) {
+      if (id && (expectedId === undefined || id === expectedId)) {
         await rouvy.dropWorkoutList();
         return id;
       }
@@ -84,6 +89,15 @@ export function createWorkoutWriter(
       await rouvy.listWorkouts();
       const id = await submit("/workouts/create", form, routeId ?? defaultRouteId);
       return readBack(id);
+    },
+    async update(workoutId, edit) {
+      // GET first: the ownership check, and the state every left-out field keeps.
+      const current = await rouvy.getOwnedWorkout(workoutId);
+      const form = edit(current);
+      // A Workout always has a route in Rouvy's creator; without one, the creator's default stands in.
+      const routeId = current.recommendedRoute?.id ?? (await rouvy.getDefaultRouteId());
+      await submit(`/workouts/${encodeURIComponent(workoutId)}/edit`, form, routeId, workoutId);
+      return readBack(workoutId);
     },
   };
 }

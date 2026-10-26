@@ -24,6 +24,7 @@ import { getWorkout } from "./tools/get-workout.js";
 import { cuesInput, descriptionInput, nameInput, stepsInput, tagsInput, visibilityInput } from "./tools/workout-input.js";
 import { listActivities } from "./tools/list-activities.js";
 import { listWorkouts } from "./tools/list-workouts.js";
+import { updateWorkout } from "./tools/update-workout.js";
 
 /** Rouvy's Activity id shape: the start as YYMMDDhhmmss, then an 8-character suffix. */
 const ACTIVITY_ID = /^\d{12}-[a-z0-9]{8}$/;
@@ -269,6 +270,28 @@ export function createServer(options: ServerOptions): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     (input) => toolResult("create_workout", () => createWorkout(workouts, input)),
+  );
+
+  server.registerTool(
+    "update_workout",
+    {
+      description:
+        "Change one of the rider's own Workouts, only when they ask. Give only what changes: steps, when given, " +
+        "replace all Steps; every field left out (cues included) keeps its current value; the route is kept. A " +
+        "get_workout result can be edited and passed back as is. Warning: a Workout synced from another app " +
+        "(TrainingPeaks, Intervals.icu…) may be overwritten by that app's next sync. Returns the saved Workout.",
+      inputSchema: z.object({
+        workout_id: workoutId,
+        name: nameInput.optional(),
+        description: descriptionInput.optional(),
+        tags: tagsInput.optional(),
+        visibility: visibilityInput.optional(),
+        steps: stepsInput.optional(),
+        cues: cuesInput.optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    (input) => toolResult("update_workout", () => updateWorkout(workouts, input)),
   );
 
   if (storage) {

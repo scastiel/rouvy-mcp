@@ -2,7 +2,7 @@
 
 Unofficial Rouvy MCP server.
 
-It reads your own [Rouvy](https://rouvy.com) Activities and serves them to any MCP client (Claude Desktop, Claude Code, Cursor…): list your Activities, read Rouvy's summary of one, and analyse its per-second data (splits, any stretch you pick, downsampled streams). It also reads your own Workouts and, when you ask, creates them in your Rouvy library. It never writes anything else. It runs locally over stdio, or [self-hosted on Cloudflare](#self-host-on-cloudflare) for web clients such as claude.ai. Please read the [disclaimer](#disclaimer) before you use it.
+It reads your own [Rouvy](https://rouvy.com) Activities and serves them to any MCP client (Claude Desktop, Claude Code, Cursor…): list your Activities, read Rouvy's summary of one, and analyse its per-second data (splits, any stretch you pick, downsampled streams). It also reads your own Workouts and, when you ask, creates or changes them in your Rouvy library. It never writes anything else. It runs locally over stdio, or [self-hosted on Cloudflare](#self-host-on-cloudflare) for web clients such as claude.ai. Please read the [disclaimer](#disclaimer) before you use it.
 
 ## Install
 
@@ -64,6 +64,7 @@ Without it, the tool doesn't exist and rouvy-mcp writes nothing to disk besides 
 | `list_workouts` | Your own Workouts (the plans in your Rouvy library), newest first: id, name, duration, TSS, difficulty, tags, number of Steps. |
 | `get_workout` | One of your Workouts: its Steps in % FTP (with cadence ranges), Cues, tags, visibility, route, and your current FTP. |
 | `create_workout` | Creates a Workout in your library from steady, ramp, free-ride and repeated Steps, with Cues and tags. Private unless you ask. |
+| `update_workout` | Changes one of your Workouts: only the fields given; new Steps replace them all. A Workout synced from another app may be overwritten by that app's next sync. |
 
 Try asking: *"How did my last ride go? Compare the first and second half of the climb."*
 

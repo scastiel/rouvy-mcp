@@ -67,10 +67,15 @@ export const descriptionInput = z.string().describe("Free text.");
 export const tagsInput = z.array(z.enum(TAGS)).describe(`Training effects, at most ${MAX_TAGS}.`);
 export const visibilityInput = z.enum(VISIBILITIES).describe("private (the default), or public only when the rider asks.");
 
+/** *Invalid Workout*: every problem, one per line, each with its path. */
+export function invalidWorkout(problems: string[]): InputError {
+  return new InputError(`Invalid Workout:\n${problems.map((p) => `- ${p}`).join("\n")}`);
+}
+
 /** Checks every rule before any request, then maps to Rouvy's form fields. */
 export function toWorkoutForm(content: WorkoutContent): WorkoutForm {
   const problems = workoutProblems(content);
-  if (problems.length > 0) throw new InputError(`Invalid Workout:\n${problems.map((p) => `- ${p}`).join("\n")}`);
+  if (problems.length > 0) throw invalidWorkout(problems);
   return {
     name: content.name,
     description: content.description ?? "",
