@@ -15,5 +15,8 @@ export function createWorkoutListCache(clock: Clock) {
     set(uid: string, list: WorkoutList) {
       entries.set(uid, { list, fetchedAt: clock.now() });
     },
+    drop(uid: string) {
+      entries.delete(uid);
+    },
   };
 }

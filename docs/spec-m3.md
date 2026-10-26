@@ -44,12 +44,12 @@ All routes are on `riders.rouvy.com`, called with the same `rouvy_session` cooki
 |---|---|---|
 | List own | `GET /workouts/collections/created.data` | turbo-stream. The rider's own Workouts are the collection with slug `created`; items carry full segments. |
 | Read | `GET /workouts/:id.data` | turbo-stream. `workout`, plus siblings `uid` and `canEdit`. |
-| Default route | `GET /workouts/create.data` | The creator's loader, read for the pre-filled recommended route (exact key found at build time). |
-| Create | `POST /workouts/create` | Native form post, `application/x-www-form-urlencoded`. Success is a 3xx to `/workouts/<newId>`. |
+| Default route | `GET /workouts/create.data` | The creator's loader, route key `routes/_main.workouts.create`. The pre-filled route is `route.id`. |
+| Create | `POST /workouts/create` | Native form post, `application/x-www-form-urlencoded`. Success is a **302** with a relative `Location: /workouts/<newId>`. |
 | Edit | `POST /workouts/:id/edit` | The same form fields as create. A **full replace** of segments and instructions. Success is a 3xx to `/workouts/:id`. |
 | Delete | `POST /workouts/:id.data` | urlencoded `id=<id>`, answered **202**. **Soft:** the Workout leaves `created` but stays readable by id. |
 
-**Form fields** (create and edit), in order: `name`, `description`, `tags` (one field per training-effect slug), `access` (`PRIVATE` or `PUBLIC`), `recommendedRouteId`, `segments` (JSON), `instructions` (JSON).
+**Form fields** (create and edit), in order: `name`, `description`, `tags` (**one** field, the training-effect slugs joined with commas), `access` (`PRIVATE` or `PUBLIC`), `recommendedRouteId`, `segments` (JSON), `instructions` (JSON).
 
 **Field names differ between read and write:**
 
@@ -69,6 +69,14 @@ All routes are on `riders.rouvy.com`, called with the same `rouvy_session` cooki
 - **`_routes`** (build step 1): both reads honour `_routes=<route key>`, as M1's list does, and then carry only that route's data (about 2.5 KB instead of 17 KB, and no `root` with the rider's profile). The client always sends it.
 - **The list overview has no `if` and no `access`** (build step 1): only a detail carries them, so `list_workouts` rows leave both out (§4) rather than read every Workout.
 - **Pagination of `created`** (build step 1): not established. The maintainer's library holds a single Workout, and `created.data` takes no offset that the web app sends. The collection carries `itemsCount`: when it ever exceeds the number of Workouts returned, `list_workouts` says so in a note instead of hiding the rest.
+- **The default route** (build step 2): `route.id` in the creator's loader data (`routes/_main.workouts.create`), next to `trainingEffectsTags` (the tag list, §5) and the rider's FTP.
+- **Tags are one comma-joined field** (build step 2). The creator submits a single hidden `tags` input, and Rouvy's form schema splits a string on commas and turns anything else into `[]`. Repeated `tags` fields are therefore accepted with a 302 and **silently saved as no tags**. Rouvy doesn't check the slugs: only our enum does.
+- **An edit that sends no tags keeps the old ones** (build step 2): `tags=` (what the creator sends with nothing selected) left both tags of a Workout in place. `update_workout` can't clear tags (§4).
+- **A rejected form post** (build step 2), triggered by a 231-character name: **200 `text/html`**, the creator re-rendered. React Router streams the action's answer into the page (`streamController.enqueue(…)`, turbo-stream). Its `actionData["routes/_main.workouts.create"]` is `{status: "error", error: {<field>: [message]}, fields, initialValue}`, here `{name: ["String must contain at most 200 character(s)"]}`. *Rouvy rejected the write* carries `<field>: <message>` pairs and never `initialValue`, which echoes the input.
+- **Rouvy's own form rules** (build step 2), read off the creator's bundle: `name` at most 200 characters (no minimum), at most 3 tags (any string), `primaryStart`/`primaryEnd` 0–500, every `duration` ≥ 1, at least 1 segment, at least 30 s in all. §5 is stricter or equal everywhere.
+- **No `Origin` or extra header** is needed on the form posts (build step 2). The web app calls `GET /resources/user/refresh-session` before submitting. We don't: our GET-first reads (§6.2) cover a dead Session.
+
+All of the above was checked on 2026-10-26 with one create, one edit, one rejected create and two deletes on the maintainer's account, each named *rouvy-mcp contract — delete me*. `created` was left as found.
 
 Sources: [Rouvy's workout API: routes, format, ownership, edit and delete](https://github.com/scastiel/rouvy-mcp/issues/74) ([findings](https://github.com/scastiel/rouvy-mcp/blob/research/rouvy-workout-api/docs/research/rouvy-workout-api.md)), [Capture the workout builder's requests in Rouvy's web app](https://github.com/scastiel/rouvy-mcp/issues/75) ([capture](https://github.com/scastiel/rouvy-mcp/blob/research/workout-capture/docs/research/rouvy-workout-capture.md)).
 
@@ -115,7 +123,7 @@ visibility: "private" (default) | "public"
 - **`repeat` is input sugar.** The server flattens it in order (`times` × its Steps). No nesting: a `repeat` inside a `repeat` is an input error.
 - **Reads return flat Steps** exactly as Rouvy stores them, so a `get_workout` result is valid `update_workout` input and round-trips. Repeats are never re-detected on read.
 - **Cues use absolute times** (seconds from the Workout's start), as Rouvy stores them.
-- **Tag slugs:** only `endurance` was observed on the wire. The other twelve slugs above are our guess from the creator's labels; confirm them at build step 2 and correct this list.
+- **Tag slugs:** confirmed at build step 2. All thirteen are exactly the slugs the creator's loader lists in `trainingEffectsTags.tags[].slug` (§3), in this order.
 - `public` is used only when the rider asks for it.
 
 **Mapping to Rouvy** (§3): `steady` → `CONSTANT` with start = end = `ftp_pct`; `ramp` → `RAMP` from/to; `free_ride` → `FREE_RIDE` with 0/0; `cadence` → `secondaryType: "CADENCE"` with min/max (all three `null` without cadence); `cue` → `{text, showDuration: show_sec, durationFromStart: at_sec}`; `visibility` → `access`.
@@ -205,6 +213,10 @@ M1's error kinds (spec-m1 §8) still apply. New kinds:
 | *Outcome unknown* | a 5xx, network error or timeout on a POST | "Rouvy may or may not have saved this. Call `list_workouts` before trying again." |
 | *Delete not confirmed* | the Workout is still in `created` after the 202 | "Rouvy answered but the Workout is still in your library" |
 | *Unsupported Workout* | an owned Workout with a segment `type` other than `FTP` (watts or W/kg, from an imported file) | "This Workout has targets other than % FTP" |
+
+A failure in the read-back after a successful POST says the Workout was saved ("call `list_workouts` to find it") rather than reading as if nothing was written.
+
+**Outcome categories** in the operations log (spec-m2 §9): *Invalid Workout* is `invalid_input`. *Rouvy rejected the write* is `write_rejected` and *outcome unknown* is `outcome_unknown`. The other kinds are `rouvy_error`. A request refused by the allow-list (§6.1) is a bug, logged as `unexpected`.
 
 Sources: [Write safety in the Rouvy client](https://github.com/scastiel/rouvy-mcp/issues/78).
 
