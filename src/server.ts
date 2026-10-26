@@ -20,6 +20,7 @@ import { getActivityIntervals } from "./tools/get-activity-intervals.js";
 import { getActivityStreams, MAX_STREAM_POINTS } from "./tools/get-activity-streams.js";
 import { getWindowStats } from "./tools/get-window-stats.js";
 import { createWorkout } from "./tools/create-workout.js";
+import { deleteWorkout } from "./tools/delete-workout.js";
 import { getWorkout } from "./tools/get-workout.js";
 import { cuesInput, descriptionInput, nameInput, stepsInput, tagsInput, visibilityInput } from "./tools/workout-input.js";
 import { listActivities } from "./tools/list-activities.js";
@@ -292,6 +293,21 @@ export function createServer(options: ServerOptions): McpServer {
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     (input) => toolResult("update_workout", () => updateWorkout(workouts, input)),
+  );
+
+  server.registerTool(
+    "delete_workout",
+    {
+      description:
+        "Delete one of the rider's own Workouts from their Rouvy library, only when they ask, and check it's " +
+        "gone. Warning: a Workout synced from another app (TrainingPeaks, Intervals.icu…) may come back with " +
+        "that app's next sync. Returns the deleted Workout's id and name.",
+      inputSchema: z.object({
+        workout_id: workoutId,
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    },
+    (input) => toolResult("delete_workout", () => deleteWorkout(workouts, input)),
   );
 
   if (storage) {

@@ -48,7 +48,7 @@ export function isRouvyUnavailable(error: unknown): boolean {
 }
 
 /** How a Workout write failed, as the operator sees it (spec-m3 §8). */
-export type WriteOutcome = "write_rejected" | "outcome_unknown";
+export type WriteOutcome = "write_rejected" | "outcome_unknown" | "delete_not_confirmed";
 
 /** A Workout write that failed, so a tool call can report its own outcome category. */
 export class WriteError extends RouvyError {
@@ -65,6 +65,14 @@ export function writeRejected(detail?: string): RouvyError {
   return new WriteError(
     detail ? `Rouvy rejected the write: ${detail}` : "Rouvy didn't accept the Workout. Nothing was saved.",
     "write_rejected",
+  );
+}
+
+/** Rouvy answered the delete, but a fresh `created` list still has the Workout. */
+export function deleteNotConfirmed(): RouvyError {
+  return new WriteError(
+    "Rouvy answered but the Workout is still in your library. Call list_workouts to check before trying again.",
+    "delete_not_confirmed",
   );
 }
 
