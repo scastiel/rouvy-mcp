@@ -105,10 +105,10 @@ describe("create_workout", () => {
   it("rides on the route given, instead of the creator's default", async () => {
     const { client, posts } = await rider();
 
-    const result = await client.callTool({ name: "create_workout", arguments: { ...INTERVALS, route_id: "317538" } });
+    const result = await client.callTool({ name: "create_workout", arguments: { ...INTERVALS, route_id: "300003" } });
 
-    expect(JSON.parse(text(result)).route.id).toBe("317538");
-    expect(new URLSearchParams(posts()[0]!.body).get("recommendedRouteId")).toBe("317538");
+    expect(JSON.parse(text(result)).route.id).toBe("300003");
+    expect(new URLSearchParams(posts()[0]!.body).get("recommendedRouteId")).toBe("300003");
   });
 
   it("makes a public Workout only when asked", async () => {

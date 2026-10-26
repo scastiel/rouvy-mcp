@@ -30,8 +30,8 @@ describe("the write allow-list", () => {
     const { politeFetch, sent } = openNetwork();
     const allowed = [
       "https://riders.rouvy.com/workouts/create",
-      "https://riders.rouvy.com/workouts/4697626/edit",
-      "https://riders.rouvy.com/workouts/4697626.data",
+      "https://riders.rouvy.com/workouts/123456/edit",
+      "https://riders.rouvy.com/workouts/123456.data",
       "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=k",
       "https://securetoken.googleapis.com/v1/token?key=k",
       "https://account.rouvy.com/resources/auth.data",
