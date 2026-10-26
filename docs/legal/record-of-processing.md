@@ -14,18 +14,18 @@ For the **Public instance** of rouvy-mcp ([spec-m2 §10](../spec-m2.md#10-legal-
 
 ## The processing
 
-One processing activity: **reading a rider's own Rouvy rides for the MCP client they connected.**
+One processing activity: **reading a rider's own Rouvy rides, and managing their own Rouvy Workouts on their request, for the MCP client they connected.**
 
 | | |
 |---|---|
-| **Purpose** | Let an invited rider's MCP client (claude.ai, for example) read that rider's own Rouvy Activities, read-only, on their request. |
+| **Purpose** | Let an invited rider's MCP client (claude.ai, for example) read that rider's own Rouvy Activities, and manage that rider's own Rouvy Workouts (read, create, change and delete them), on their request. |
 | **Legal basis** | Consent, Art. 6(1)(a). For health data, explicit consent, Art. 9(2)(a). Both are given with the two sign-in checkboxes, on every sign-in, and withdrawn by disconnecting. |
 | **Data subjects** | Invited riders: adults with a Rouvy account, on the allow-list. |
-| **Categories of data** | Rouvy email and password (the password at sign-in only, never stored); Rouvy refresh token and email (stored encrypted in each Grant), Firebase uid (stored in clear: it keys the Grant); ride data (Activities, power, cadence, speed, heart rate, Rider settings such as weight, FTP and zones), in memory only. |
+| **Categories of data** | Rouvy email and password (the password at sign-in only, never stored); Rouvy refresh token and email (stored encrypted in each Grant), Firebase uid (stored in clear: it keys the Grant); ride data (Activities, power, cadence, speed, heart rate, Rider settings such as weight, FTP and zones), in memory only; the rider's own Workouts (names, descriptions, Steps, cues, tags, and the current FTP Rouvy shows with them), in memory only, and written to Rouvy only on the rider's request. |
 | **Special categories** | Health data (Art. 9): heart rate, and arguably weight and heart-rate zones within Rider settings. |
-| **Recipients** | Cloudflare, Inc., as processor (hosting: Workers, Durable Objects, KV, Workers Logs), under its DPA. The rider's own MCP client, at the rider's request. Rouvy and its sign-in service (Google Firebase) are the source the instance signs in to, not recipients of anything new. |
+| **Recipients** | Cloudflare, Inc., as processor (hosting: Workers, Durable Objects, KV, Workers Logs), under its DPA. The rider's own MCP client, at the rider's request. Rouvy receives the Workouts the rider asks to create or change, in the rider's own library. Otherwise Rouvy and its sign-in service (Google Firebase) are the source the instance signs in to, not recipients of anything new. |
 | **Transfers** | Cloudflare's network is global. The Durable Object that handles ride data runs in the EU jurisdiction; the Worker front (sign-in, token checks) runs at the edge location nearest the rider. KV, which holds the encrypted Grants, is global. The controller is in Québec. Canada's EU adequacy decision covers only organisations under PIPEDA, which this non-commercial instance is not, so it gives no cover here; the controller can delete Grants but cannot decrypt the refresh tokens in them. Cloudflare's transfers are covered by its DPA (standard contractual clauses, EU–US Data Privacy Framework). |
-| **Retention** | Grants (encrypted refresh token and email, uid in clear): deleted after **30 days** without use. Access tokens: 1 hour. Workers Logs: **7 days**: our own structured events, and the OAuth library's error lines (which name clients, not riders); no uid, email, IP address, token or `props`. Ride data, cookies and the Rouvy Session: in memory, dropped after **30 minutes** idle. **No Activity data at rest.** |
+| **Retention** | Grants (encrypted refresh token and email, uid in clear): deleted after **30 days** without use. Access tokens: 1 hour. Workers Logs: **7 days**: our own structured events, and the OAuth library's error lines (which name clients, not riders); no uid, email, IP address, token or `props`. Ride data, Workouts, cookies and the Rouvy Session: in memory, dropped after **30 minutes** idle (the list of the rider's Workouts after 60 s). **No Activity or Workout data at rest**: the Workouts a rider creates live in their own Rouvy library. |
 | **Security measures** | See [Security measures](#security-measures). |
 | **Automated decisions** | None. No profiling. |
 
@@ -35,7 +35,7 @@ One processing activity: **reading a rider's own Rouvy rides for the MCP client 
 - **The password** is sent once to Firebase over TLS, then discarded: never stored, never logged.
 - **Allow-list** checked on the typed email before any Firebase call, and again on the email Firebase returns.
 - **Logging** ([spec-m2 §9](../spec-m2.md#9-operations)): invocation logs off; only our own structured events and the OAuth library's error lines, with no rider data.
-- **Read-only by construction:** the code makes no write to Rouvy.
+- **Writes only the rider's own Workouts** ([spec-m3 §6](../spec-m3.md#6-write-safety)): every request other than a GET is refused before it leaves, unless it is one of the three Workout write routes or a sign-in or refresh POST. A write happens only on a tool call the rider asked for. It first checks the Workout is the rider's own (in their library, and created by their account), and it is never retried. Activities, Rider settings and the profile stay read-only by construction.
 - **Kill paths:** per rider (remove from the allow-list, delete their Grants: [operations.md](../operations.md#kill-one-rider)); for everyone, the [Hard stop](../runbooks/hard-stop.md) and the [token-leak runbook](../runbooks/token-leak.md).
 - **Breach log** (Art. 33(5)), which is also the Law 25 confidentiality-incident register: kept privately by the maintainer.
 
@@ -46,7 +46,7 @@ GDPR applies through Art. 3(2)(a): the instance offers a service to riders in th
 We rely on that exemption because:
 
 - **Not large scale:** the instance is invite-only, with a handful of riders the maintainer knows, and no plan to grow beyond the allow-list without Rouvy's written permission ([spec-m2 §1](../spec-m2.md#1-scope)).
-- **Low risk:** no ride data is stored; the one thing kept is an encrypted refresh token the operator cannot read; access is read-only; the rider can end it any time by changing their Rouvy password; the [DPIA](dpia.md) finds the residual risk low.
+- **Low risk:** no ride data is stored; the one thing kept is an encrypted refresh token the operator cannot read; access is read-only except for the rider's own Workouts, written only on their request; the rider can end it any time by changing their Rouvy password; the [DPIA](dpia.md) finds the residual risk low.
 - **Occasional:** each rider's data is processed only when their own client calls, on their request.
 
 **Known weakness:** a service that runs all the time could be read as "regular", not occasional, which would take the exemption away.

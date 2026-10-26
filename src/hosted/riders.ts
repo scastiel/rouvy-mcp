@@ -29,6 +29,8 @@ export interface GrantProps {
   refreshToken: string;
   uid: string;
   email: string;
+  /** The consent wording the rider ticked (`CONSENT_VERSION`). Missing on M2's Grants: version 1. */
+  consentVersion?: number;
 }
 
 /**

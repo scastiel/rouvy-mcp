@@ -20,6 +20,8 @@ export interface AuthorizeOptions {
   log: Log;
   /** Who runs this instance, named on the page above the password field. */
   operator: Operator;
+  /** The consent wording the page shows, recorded in the Grant. */
+  consentVersion: number;
 }
 
 const INVITE_ONLY: Problem = { message: "This instance is invite-only.", inviteOnly: true };
@@ -31,7 +33,10 @@ const NO_CONSENT: Problem = { message: "Tick both boxes to connect." };
  * Firebase ever sees them, then M1's sign-in and one Rouvy check. The password is used once and
  * dropped; the Grant keeps only the refresh token, encrypted by the provider.
  */
-export async function authorize(request: Request, { oauth, allowList, fetch, log, operator }: AuthorizeOptions): Promise<Response> {
+export async function authorize(
+  request: Request,
+  { oauth, allowList, fetch, log, operator, consentVersion }: AuthorizeOptions,
+): Promise<Response> {
   const allowed = parseAllowList(allowList);
   try {
     if (request.method === "GET") return await showSignIn(oauth, operator, await oauth.parseAuthRequest(request));
@@ -64,7 +69,7 @@ export async function authorize(request: Request, { oauth, allowList, fetch, log
       if (!tokens.email || !allowed.has(tokens.email.toLowerCase())) return await retry(INVITE_ONLY);
       // Once, to confirm the account works on Rouvy, not just on Firebase.
       await openRouvySession(fetch, tokens);
-      props = { refreshToken: tokens.refreshToken, uid: tokens.uid, email: tokens.email };
+      props = { refreshToken: tokens.refreshToken, uid: tokens.uid, email: tokens.email, consentVersion };
     } catch (error) {
       return await retry({ message: error instanceof AuthError ? error.message : "Couldn't reach Rouvy. Try again later." });
     }
