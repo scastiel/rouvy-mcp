@@ -34,10 +34,46 @@ export function isTerminalAuthFailure(error: unknown): boolean {
   return error instanceof NotLoggedInError && error.terminal;
 }
 
+class RouvyUnavailableError extends RouvyError {}
+
 /** A 5xx (with its status) or a network error (without one). */
 export function rouvyUnavailable(status?: number): RouvyError {
   const detail = status === undefined ? "it can't be reached" : `HTTP ${status}`;
-  return new RouvyError(`Rouvy is unavailable right now (${detail}). Try later.`);
+  return new RouvyUnavailableError(`Rouvy is unavailable right now (${detail}). Try later.`);
+}
+
+/** Whether a request failed with a 5xx or a network error: on a POST, nobody knows if it was saved. */
+export function isRouvyUnavailable(error: unknown): boolean {
+  return error instanceof RouvyUnavailableError;
+}
+
+/** How a Workout write failed, as the operator sees it (spec-m3 §8). */
+export type WriteOutcome = "write_rejected" | "outcome_unknown";
+
+/** A Workout write that failed, so a tool call can report its own outcome category. */
+export class WriteError extends RouvyError {
+  constructor(
+    message: string,
+    readonly outcome: WriteOutcome,
+  ) {
+    super(message);
+  }
+}
+
+/** Rouvy answered the form post without saving: a 200 re-rendering the form, or an unexpected redirect. */
+export function writeRejected(detail?: string): RouvyError {
+  return new WriteError(
+    detail ? `Rouvy rejected the write: ${detail}` : "Rouvy didn't accept the Workout. Nothing was saved.",
+    "write_rejected",
+  );
+}
+
+/** A 5xx, network error or timeout on a POST: it may or may not have been saved, and is never retried. */
+export function outcomeUnknown(): RouvyError {
+  return new WriteError(
+    "Rouvy may or may not have saved this. Call list_workouts before trying again.",
+    "outcome_unknown",
+  );
 }
 
 export function blockedByBotProtection(until: number): RouvyError {

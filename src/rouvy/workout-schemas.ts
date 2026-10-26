@@ -63,6 +63,19 @@ export function parseWorkoutList(payload: unknown): WorkoutList {
   return result.data[WORKOUT_LIST_ROUTE].data.collection;
 }
 
+export const WORKOUT_CREATOR_ROUTE = "routes/_main.workouts.create";
+
+/** The creator's loader: only the route it pre-fills for a new Workout is read. */
+const workoutCreatorPayload = z.object({
+  [WORKOUT_CREATOR_ROUTE]: z.object({ data: z.object({ route: z.object({ id: z.string() }) }) }),
+});
+
+export function parseDefaultRouteId(payload: unknown): string {
+  const result = workoutCreatorPayload.safeParse(payload);
+  if (!result.success) throw apiChanged(WORKOUT_CREATOR_ROUTE, describePath(result.error.issues[0]?.path.slice(2) ?? []));
+  return result.data[WORKOUT_CREATOR_ROUTE].data.route.id;
+}
+
 export function parseWorkoutDetail(payload: unknown): WorkoutDetail {
   const result = workoutDetailPayload.safeParse(payload);
   if (!result.success) throw apiChanged(WORKOUT_DETAIL_ROUTE, describePath(result.error.issues[0]?.path.slice(2) ?? []));

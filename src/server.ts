@@ -5,7 +5,9 @@ import type { CredentialsProvider } from "./credentials/types.js";
 import { withUserAgent } from "./http.js";
 import { createRouvyClient, type RouvyClient } from "./rouvy/client.js";
 import { systemClock, type Clock } from "./rouvy/clock.js";
-import { isNotLoggedIn, isTerminalAuthFailure, RouvyError } from "./rouvy/errors.js";
+import { withAllowList } from "./rouvy/allow-list.js";
+import { isNotLoggedIn, isTerminalAuthFailure, RouvyError, WriteError, type WriteOutcome } from "./rouvy/errors.js";
+import { createWorkoutWriter, type WorkoutWriter } from "./rouvy/workout-writes.js";
 import { createPushback, type CoolDown } from "./rouvy/pushback.js";
 import { createRequestQueue } from "./rouvy/request-queue.js";
 import { createSessionManager } from "./rouvy/session-manager.js";
@@ -17,7 +19,9 @@ import { EXPORT_FORMATS, exportActivityFile } from "./tools/export-activity-file
 import { getActivityIntervals } from "./tools/get-activity-intervals.js";
 import { getActivityStreams, MAX_STREAM_POINTS } from "./tools/get-activity-streams.js";
 import { getWindowStats } from "./tools/get-window-stats.js";
+import { createWorkout } from "./tools/create-workout.js";
 import { getWorkout } from "./tools/get-workout.js";
+import { cuesInput, descriptionInput, nameInput, stepsInput, tagsInput, visibilityInput } from "./tools/workout-input.js";
 import { listActivities } from "./tools/list-activities.js";
 import { listWorkouts } from "./tools/list-workouts.js";
 
@@ -52,6 +56,7 @@ export interface RiderOptions {
  */
 export interface Rider {
   readonly rouvy: RouvyClient;
+  readonly workouts: WorkoutWriter;
 }
 
 export type ServerOptions = (RiderOptions | { rider: Rider }) & {
@@ -72,7 +77,14 @@ export type ServerOptions = (RiderOptions | { rider: Rider }) & {
 };
 
 /** How a tool call ended: a category, never the message the rider saw. */
-export type ToolOutcome = "ok" | "invalid_input" | "signed_out" | "no_session" | "rouvy_error" | "unexpected";
+export type ToolOutcome =
+  | "ok"
+  | "invalid_input"
+  | "signed_out"
+  | "no_session"
+  | "rouvy_error"
+  | WriteOutcome
+  | "unexpected";
 
 export interface ToolCall {
   tool: string;
@@ -80,13 +92,16 @@ export interface ToolCall {
   durationMs: number;
 }
 
-/** One request at a time, backing off when Rouvy pushes back, with the honest user agent (spec §7). */
+/**
+ * One request at a time, backing off when Rouvy pushes back, with the honest user agent (spec §7).
+ * Anything but a GET is refused before it is queued unless it's on the allow-list (spec-m3 §6.1).
+ */
 export function createPoliteFetch(
   fetch: typeof globalThis.fetch,
   clock: Clock = systemClock,
   { onCoolDown }: { onCoolDown?: (coolDown: CoolDown) => void } = {},
 ): typeof globalThis.fetch {
-  return withUserAgent(createRequestQueue(createPushback(fetch, clock, onCoolDown), clock));
+  return withAllowList(withUserAgent(createRequestQueue(createPushback(fetch, clock, onCoolDown), clock)));
 }
 
 export function createRider({
@@ -95,13 +110,15 @@ export function createRider({
   clock = systemClock,
   politeFetch = createPoliteFetch(fetch, clock),
 }: RiderOptions): Rider {
-  return { rouvy: createRouvyClient(politeFetch, createSessionManager(politeFetch, credentials, clock), clock) };
+  const sessions = createSessionManager(politeFetch, credentials, clock);
+  const rouvy = createRouvyClient(politeFetch, sessions, clock);
+  return { rouvy, workouts: createWorkoutWriter(politeFetch, sessions, rouvy) };
 }
 
 /** The transport-agnostic core: knows nothing about stdio, files or passwords. */
 export function createServer(options: ServerOptions): McpServer {
   const { storage, onTerminalAuthFailure, notLoggedInMessage, onToolCall } = options;
-  const { rouvy } = "rider" in options ? options.rider : createRider(options);
+  const { rouvy, workouts } = "rider" in options ? options.rider : createRider(options);
   const server = new McpServer({ name: "rouvy-mcp", version: VERSION });
   const toolResult = (tool: string, run: () => Promise<unknown>) =>
     runTool(run, onTerminalAuthFailure, notLoggedInMessage, (outcome, durationMs) => onToolCall?.({ tool, outcome, durationMs }));
@@ -228,6 +245,32 @@ export function createServer(options: ServerOptions): McpServer {
     (input) => toolResult("get_workout", () => getWorkout(rouvy, input)),
   );
 
+  server.registerTool(
+    "create_workout",
+    {
+      description:
+        "Create a Workout in the rider's Rouvy library, only when they ask for one. Steps are steady, ramp or " +
+        "free ride, in % FTP (use get_workout's rider_ftp_w to convert watts), each with an optional cadence " +
+        "range; repeat a block with a repeat Step. Private unless the rider asks for public. Returns the saved " +
+        "Workout as Rouvy has it. If it says the outcome is unknown, call list_workouts before trying again.",
+      inputSchema: z.object({
+        name: nameInput,
+        description: descriptionInput.optional(),
+        tags: tagsInput.optional(),
+        visibility: visibilityInput.optional(),
+        route_id: z
+          .string()
+          .regex(/^\d{1,12}$/, "a route id as get_workout returns it (digits)")
+          .optional()
+          .describe("The route to ride it on, as get_workout returns it. Default: Rouvy's suggested route."),
+        steps: stepsInput,
+        cues: cuesInput.optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    (input) => toolResult("create_workout", () => createWorkout(workouts, input)),
+  );
+
   if (storage) {
     server.registerTool(
       "export_activity_file",
@@ -276,5 +319,6 @@ async function runTool(
 function outcomeOf(error: unknown): ToolOutcome {
   if (isNotLoggedIn(error)) return isTerminalAuthFailure(error) ? "signed_out" : "no_session";
   if (error instanceof InputError) return "invalid_input";
+  if (error instanceof WriteError) return error.outcome;
   return error instanceof RouvyError ? "rouvy_error" : "unexpected";
 }

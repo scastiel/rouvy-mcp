@@ -23,8 +23,10 @@ import {
 import { asRedirect, decodeSingleFetch } from "./turbo-stream.js";
 import { createWorkoutListCache } from "./workout-list-cache.js";
 import {
+  parseDefaultRouteId,
   parseWorkoutDetail,
   parseWorkoutList,
+  WORKOUT_CREATOR_ROUTE,
   WORKOUT_DETAIL_ROUTE,
   WORKOUT_LIST_ROUTE,
   type WorkoutDetail,
@@ -45,6 +47,10 @@ export interface RouvyClient {
   listWorkouts(): Promise<WorkoutList>;
   /** One Workout, read fresh, only if it's the rider's own (spec-m3 §6.3); otherwise *Workout not found*. */
   getOwnedWorkout(workoutId: string): Promise<WorkoutDetail>;
+  /** The route Rouvy's creator pre-fills for a new Workout. Never cached: it's a write's first GET. */
+  getDefaultRouteId(): Promise<string>;
+  /** Forgets the cached `created` list, after a write that succeeded or whose outcome is unknown. */
+  dropWorkoutList(): Promise<void>;
 }
 
 /** A parsed Activity file, with its bytes as downloaded so an export never costs a second request. */
@@ -144,6 +150,15 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
       // …and created by this rider. Rouvy's own `canEdit` is true on catalogue Workouts too.
       if (workout.createdBy.firebaseUid !== (await sessions.uid())) throw workoutNotFound();
       return workout;
+    },
+    async getDefaultRouteId() {
+      const payload = await getData(WORKOUT_CREATOR_ROUTE, "/workouts/create.data", {
+        params: () => ({ _routes: WORKOUT_CREATOR_ROUTE }),
+      });
+      return parseDefaultRouteId(payload);
+    },
+    async dropWorkoutList() {
+      workoutListCache.drop(await sessions.uid());
     },
     async getActivityFile(activityId) {
       const uid = await sessions.uid();

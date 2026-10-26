@@ -1,12 +1,7 @@
 import { homedir } from "node:os";
 import { describe, expect, it } from "vitest";
 import { createFileCredentialsProvider, defaultCredentialsPath } from "../../src/credentials/file.js";
-import { withUserAgent } from "../../src/http.js";
-import { createRouvyClient } from "../../src/rouvy/client.js";
-import { systemClock } from "../../src/rouvy/clock.js";
-import { createPushback } from "../../src/rouvy/pushback.js";
-import { createRequestQueue } from "../../src/rouvy/request-queue.js";
-import { createSessionManager } from "../../src/rouvy/session-manager.js";
+import { createRider } from "../../src/server.js";
 import { windowStats } from "../../src/stats/window.js";
 import { loadActivityFile } from "../../src/tools/activity-file-analysis.js";
 import { toWorkoutResult } from "../../src/tools/workout-shape.js";
@@ -19,8 +14,8 @@ import { toWorkoutResult } from "../../src/tools/workout-shape.js";
 const credentials = createFileCredentialsProvider(
   defaultCredentialsPath({ env: process.env, platform: process.platform, homedir: homedir() }),
 );
-const politeFetch = withUserAgent(createRequestQueue(createPushback(globalThis.fetch, systemClock), systemClock));
-const rouvy = createRouvyClient(politeFetch, createSessionManager(politeFetch, credentials, systemClock), systemClock);
+// The server's own polite fetch, allow-list included.
+const { rouvy } = createRider({ credentials });
 
 /** How many of the newest Activities to look through for one with power and an Activity file. */
 const CANDIDATES = 3;
