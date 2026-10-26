@@ -1,7 +1,14 @@
 import { decode } from "turbo-stream";
 import type { WriteInstruction, WriteSegment } from "../workouts/steps.js";
 import type { RouvyClient } from "./client.js";
-import { isRouvyUnavailable, outcomeUnknown, RouvyError, WriteError, writeRejected } from "./errors.js";
+import {
+  deleteNotConfirmed,
+  isRouvyUnavailable,
+  outcomeUnknown,
+  RouvyError,
+  WriteError,
+  writeRejected,
+} from "./errors.js";
 import type { SessionManager } from "./session-manager.js";
 import type { WorkoutDetail } from "./workout-schemas.js";
 
@@ -30,6 +37,11 @@ export interface WorkoutWriter {
    * The route is always kept. Last write wins: Rouvy keeps no version to compare against.
    */
   update(workoutId: string, edit: (current: WorkoutDetail) => WorkoutForm): Promise<WorkoutDetail>;
+  /**
+   * Removes an owned Workout from the rider's library and checks it's gone from a fresh `created`
+   * list. Rouvy's delete is soft: the Workout stays readable by its id. Returns its name.
+   */
+  delete(workoutId: string): Promise<{ name: string }>;
 }
 
 export function createWorkoutWriter(
@@ -98,6 +110,17 @@ export function createWorkoutWriter(
       const routeId = current.recommendedRoute?.id ?? (await rouvy.getDefaultRouteId());
       await submit(`/workouts/${encodeURIComponent(workoutId)}/edit`, form, routeId, workoutId);
       return readBack(workoutId);
+    },
+    async delete(workoutId) {
+      // GET first: the ownership check. It also reads the Workout itself, so the POST never goes out
+      // on a Session's very first request, which Rouvy answers with a cookie redirect (also a 202).
+      const { name } = await rouvy.getOwnedWorkout(workoutId);
+      const response = await post(`/workouts/${encodeURIComponent(workoutId)}.data`, new URLSearchParams({ id: workoutId }));
+      await rouvy.dropWorkoutList();
+      if (response.status !== 202) throw writeRejected();
+      const { workouts } = await rouvy.listWorkouts();
+      if (workouts.some((w) => w.id === workoutId)) throw deleteNotConfirmed();
+      return { name };
     },
   };
 }

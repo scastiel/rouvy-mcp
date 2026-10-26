@@ -4,7 +4,7 @@ Releases are `0.x` semver, published by [`.github/workflows/release.yml`](../.gi
 
 ## Every release
 
-1. On `main`, with CI green: run `npm run contract:live` on your machine (it uses your own credentials file; run `npx -y rouvy-mcp login` first if needed). It must pass right before the release.
+1. On `main`, with CI green: run `npm run contract:live` on your machine (it uses your own credentials file; run `npx -y rouvy-mcp login` first if needed). It must pass right before the release. For a release that touches Workouts, run `npm run contract:live -- --writes` instead: it also creates, edits and deletes a *rouvy-mcp contract — delete me* Workout in your library, and deletes it even when a step fails. Without `--writes`, it never writes a Workout.
 2. Bump the version in a PR: `npm version <patch|minor> --no-git-tag-version`, commit `package.json`, `package-lock.json` and `src/version.ts` (`npm version` rewrites it: nothing reads `package.json` at runtime), merge.
 3. Tag the merged commit and push the tag:
 
@@ -24,7 +24,7 @@ Tests talk to the server over the SDK's in-memory pair and send raw `server/disc
 
 1. `npm run build`, then point each client at the build instead of npm: `"command": "node", "args": ["/absolute/path/to/rouvy-mcp/dist/bin.js"]` in Claude Desktop's `claude_desktop_config.json`, and `claude mcp add rouvy-local -- node /absolute/path/to/rouvy-mcp/dist/bin.js` in Claude Code.
 2. Restart the client: the server shows as connected, with its tools listed (`/mcp` in Claude Code).
-3. Ask for each tool in turn: your last Activities (`list_activities`), that Activity's summary (`get_activity`), its 5-minute splits (`get_activity_intervals`), stats from minute 10 to 20 (`get_window_stats`), its power and heart rate as a chart (`get_activity_streams`), and, with `ROUVY_MCP_EXPORT_DIR` set, an export to CSV (`export_activity_file`).
+3. Ask for each tool in turn: your last Activities (`list_activities`), that Activity's summary (`get_activity`), its 5-minute splits (`get_activity_intervals`), stats from minute 10 to 20 (`get_window_stats`), its power and heart rate as a chart (`get_activity_streams`), and, with `ROUVY_MCP_EXPORT_DIR` set, an export to CSV (`export_activity_file`). Then your Workouts (`list_workouts`) and one of them (`get_workout`), and a throwaway Workout that you create, rename and delete (`create_workout`, `update_workout`, `delete_workout`): the client should ask before the two destructive ones.
 4. Run `node dist/bin.js logout` (or point `XDG_CONFIG_HOME` at an empty folder), ask again: the answer is the *Not logged in* message naming `npx -y rouvy-mcp login`.
 5. Put the clients back on `rouvy-mcp@latest`.
 

@@ -1,6 +1,6 @@
 {
   "name": "rouvy-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Unofficial Rouvy MCP server",
   "keywords": [
     "mcp",
@@ -37,7 +37,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "canary": "vitest run --config vitest.live.config.ts canary.live",
-    "contract:live": "vitest run --config vitest.live.config.ts contract.live",
+    "contract:live": "node scripts/contract-live.mjs",
     "deploy": "node scripts/write-version.mjs && wrangler deploy"
   },
   "devDependencies": {
