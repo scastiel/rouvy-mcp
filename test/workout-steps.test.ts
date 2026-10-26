@@ -148,11 +148,11 @@ describe("validation", () => {
 
 describe("reading Rouvy's answer to a form post", () => {
   it.each([
-    ["/workouts/4697626", "4697626"],
-    ["https://riders.rouvy.com/workouts/4697626", "4697626"],
+    ["/workouts/123456", "123456"],
+    ["https://riders.rouvy.com/workouts/123456", "123456"],
     ["/workouts", undefined],
-    ["/workouts/4697626/edit", undefined],
-    ["/workouts/4697626?error=1", undefined],
+    ["/workouts/123456/edit", undefined],
+    ["/workouts/123456?error=1", undefined],
     ["https://account.rouvy.com/sign-in?redirectTo=%2Fworkouts%2Fcreate", undefined],
     ["https://example.com/workouts/1", undefined],
   ])("takes the Workout id from Location %s", (location, id) => {
