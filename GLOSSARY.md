@@ -8,7 +8,11 @@ An unofficial MCP server that reads a rider's own Rouvy rides and serves them to
 
 **Activity**:
 One completed ride on Rouvy, as Rouvy itself names it.
-_Avoid_: Session, ride, workout
+_Avoid_: Session, ride, workout (a Workout is the plan, not the ride)
+
+**Workout**:
+A structured plan of steps (durations and targets such as a share of FTP) saved in the rider's own Rouvy library, ridden later as an Activity.
+_Avoid_: Training, plan, session, interval file
 
 **Activity file**:
 Rouvy's raw per-second recording of one Activity, the file behind Rouvy's "Export" button.
