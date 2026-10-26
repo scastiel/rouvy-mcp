@@ -28,13 +28,13 @@ The stdio `npx rouvy-mcp` stays first-class and unchanged, apart from moving to 
 - Payments or any paid tier.
 - `export_activity_file` on the hosted server.
 - Client-specific code or bundles. claude.ai custom connectors are the reference client, through the plain MCP authorization spec only.
-- Scopes, and any write to Rouvy.
+- Scopes, and any write to Rouvy. _Changed in M3: Workout writes, see [spec-m3 §1](spec-m3.md#1-scope)._
 
 Sources: [Map](https://github.com/scastiel/rouvymcp/issues/28), [Hosting platform and storage for the hosted server](https://github.com/scastiel/rouvymcp/issues/36), [Client-to-server sign-in flow for the hosted server](https://github.com/scastiel/rouvymcp/issues/34), [Assemble the M2 spec: form, location, and contents](https://github.com/scastiel/rouvymcp/issues/37).
 
 ## 2. Ground rules
 
-M1's ground rules ([spec-m1 §2](spec-m1.md#2-ground-rules)) apply unchanged: the politeness charter, the honest UA, no secrets in logs, repo hygiene, read-only by construction. The hosted server adds:
+M1's ground rules ([spec-m1 §2](spec-m1.md#2-ground-rules)) apply unchanged: the politeness charter, the honest UA, no secrets in logs, repo hygiene, read-only by construction (_changed in M3: "writes Workouts only", see [spec-m3 §2](spec-m3.md#2-ground-rules)_). The hosted server adds:
 
 - **Hard stop.** If Rouvy objects to the Public instance or blocks it, the instance shuts down and every Grant is deleted within 24 hours (§9). We never rotate IPs, disguise the UA or move hosts to get around a block.
 - **No Activity data at rest.** Activity data lives only in memory caches. The one thing kept per rider is the Rouvy refresh token, encrypted inside the Grant (§6).
@@ -106,7 +106,7 @@ Sources: [MCP authorization spec and what claude.ai and other clients support](h
 
 - **Header:** "\<client name\> (\<verified domain\>) wants to read your Rouvy rides", the redirect host, and an "unofficial, not affiliated with Rouvy" line. Every client-supplied string is escaped.
 - **Fields:** Rouvy email and Rouvy password.
-- **Two separate checkboxes, both required, neither pre-ticked:**
+- **Two separate checkboxes, both required, neither pre-ticked:** _(changed in M3: the risk checkbox covers Workout writes, see [spec-m3 §9](spec-m3.md#9-hosted-server))_
   1. the rider accepts the risk to **their own** Rouvy account under Rouvy's terms (§7.c, §14.a.vi), and the Hard stop;
   2. explicit consent to processing health data (GDPR Art. 9(2)(a)).
 - **Links:** `/privacy` and the self-host README.
@@ -123,7 +123,7 @@ Sources: [MCP authorization spec and what claude.ai and other clients support](h
 
 1. M1's `signInWithPassword`.
 2. One Rouvy check, as `login` does.
-3. `completeAuthorization` with `userId` = Firebase uid and `props` = `{ refreshToken, uid, email }`.
+3. `completeAuthorization` with `userId` = Firebase uid and `props` = `{ refreshToken, uid, email }`. _Changed in M3: plus `consentVersion`, see [spec-m3 §9](spec-m3.md#9-hosted-server)._
 4. The password is discarded.
 
 Firebase errors show M1's plain messages, never Firebase response bodies.
@@ -325,6 +325,7 @@ This spec fixes the pages, the notice sections, the checkboxes and the paperwork
 
 **Rouvy permission request** (outline; the email is written at beta time):
 
+- _Changed in M3: sent when M3 is live and covers Workout writes, see [spec-m3 §9](spec-m3.md#9-hosted-server)._
 - **When:** as the invite-only beta goes live. The beta doesn't wait for a reply. Leaving the allow-list waits for a written §29.i yes, and silence is never a yes.
 - **Who and where:** the maintainer, under their real name, with a link to the repo. The same text goes to a Rouvy help-desk ticket (asking to be forwarded to whoever owns partner or API access) and to one named Rouvy product or business person. One follow-up to both after about **4 weeks**.
 - **What it covers:**
