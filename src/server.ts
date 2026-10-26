@@ -17,7 +17,9 @@ import { EXPORT_FORMATS, exportActivityFile } from "./tools/export-activity-file
 import { getActivityIntervals } from "./tools/get-activity-intervals.js";
 import { getActivityStreams, MAX_STREAM_POINTS } from "./tools/get-activity-streams.js";
 import { getWindowStats } from "./tools/get-window-stats.js";
+import { getWorkout } from "./tools/get-workout.js";
 import { listActivities } from "./tools/list-activities.js";
+import { listWorkouts } from "./tools/list-workouts.js";
 
 /** Rouvy's Activity id shape: the start as YYMMDDhhmmss, then an 8-character suffix. */
 const ACTIVITY_ID = /^\d{12}-[a-z0-9]{8}$/;
@@ -26,6 +28,12 @@ const activityId = z
   .string()
   .regex(ACTIVITY_ID, "an Activity id as returned by list_activities (YYMMDDhhmmss-xxxxxxxx)")
   .describe("An Activity id as returned by list_activities.");
+
+/** Digits only, so nothing else ever reaches a URL path (spec-m3 §4). */
+const workoutId = z
+  .string()
+  .regex(/^\d{1,12}$/, "a Workout id as returned by list_workouts (digits)")
+  .describe("A Workout id as returned by list_workouts.");
 
 export interface RiderOptions {
   credentials: CredentialsProvider;
@@ -188,6 +196,36 @@ export function createServer(options: ServerOptions): McpServer {
       }),
     },
     (input) => toolResult("get_activity_streams", () => getActivityStreams(rouvy, input)),
+  );
+
+  server.registerTool(
+    "list_workouts",
+    {
+      description:
+        "List the rider's own Workouts in their Rouvy library (the plans, not the rides), newest first, as " +
+        "compact rows (id, name, duration, TSS, difficulty, tags, number of Steps). Use get_workout for the Steps.",
+      inputSchema: z.object({
+        limit: z.number().int().min(1).max(50).default(10).describe("How many Workouts to return (1–50)."),
+        offset: z.number().int().min(0).default(0).describe("How many of the newest Workouts to skip."),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    (input) => toolResult("list_workouts", () => listWorkouts(rouvy, input)),
+  );
+
+  server.registerTool(
+    "get_workout",
+    {
+      description:
+        "One of the rider's own Workouts: name, description, tags, visibility, duration, TSS, IF, difficulty, " +
+        "route, its Steps (steady, ramp or free ride, in % FTP, with an optional cadence range) and Cues (text " +
+        "at a time from the start). Also rider_ftp_w, the rider's current FTP in watts, to turn watts into % FTP.",
+      inputSchema: z.object({
+        workout_id: workoutId,
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    (input) => toolResult("get_workout", () => getWorkout(rouvy, input)),
   );
 
   if (storage) {

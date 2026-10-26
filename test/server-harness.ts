@@ -143,6 +143,50 @@ export function loggedOut(): Response {
 
 export { fakeNetwork, json, rouvySessionOpened };
 
+export const WORKOUT_LIST_ROUTE = "routes/_main.workouts.collections.$id";
+export const WORKOUT_DETAIL_ROUTE = "routes/_main.workouts.$id";
+/** The fake network's key for the rider's `created` collection. */
+export const WORKOUT_LIST = "riders.rouvy.com/workouts/collections/created.data";
+/** The fake network's key for one Workout's detail payload. */
+export const workoutDetail = (workoutId: string) => `riders.rouvy.com/workouts/${workoutId}.data`;
+/** The one Workout in the redacted fixtures, owned by `fixture-uid`. */
+export const FIXTURE_WORKOUT = "100001";
+
+export type WorkoutOverviewPayload = Record<string, any>;
+export type WorkoutListPayload = { collection: { itemsCount: number; workouts: WorkoutOverviewPayload[] } & Record<string, unknown> };
+export type WorkoutDetailPayload = { workout: Record<string, any>; uid: string } & Record<string, unknown>;
+
+async function decodeFixture(name: string): Promise<Record<string, { data: unknown }>> {
+  const text = readFileSync(new URL(`./fixtures/${name}`, import.meta.url), "utf8");
+  const { value, done } = await decode(new Blob([text]).stream());
+  await done;
+  return structuredClone(value) as Record<string, { data: unknown }>;
+}
+
+/**
+ * A real rider's `created` collection and one of its Workouts, redacted, owned by `uid`. The list
+ * and the detail each come back as their own payload, for a test to change before serving.
+ */
+export async function workoutFixtures(uid = "uid-1") {
+  const list = (await decodeFixture("workouts-created.data"))[WORKOUT_LIST_ROUTE]!.data as WorkoutListPayload;
+  const detail = (await decodeFixture("workout-detail.data"))[WORKOUT_DETAIL_ROUTE]!.data as WorkoutDetailPayload;
+  detail.uid = uid;
+  detail.workout.createdBy.firebaseUid = uid;
+  return {
+    list,
+    detail,
+    listResponse: () => turboStream({ [WORKOUT_LIST_ROUTE]: { data: list } }),
+    detailResponse: () => turboStream({ [WORKOUT_DETAIL_ROUTE]: { data: detail } }),
+  };
+}
+
+/** A `created` collection of synthetic Workouts, ids as given, each a copy of the fixture's overview. */
+export function workoutList(list: WorkoutListPayload, ids: string[]): WorkoutListPayload {
+  const [template] = list.collection.workouts;
+  const workouts = ids.map((id, i) => ({ ...structuredClone(template), id, name: `Workout ${i}` }));
+  return { ...list, collection: { ...list.collection, itemsCount: workouts.length, workouts } };
+}
+
 type Detail = { activity: Record<string, any>; exportLink: string | null };
 
 /**

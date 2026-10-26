@@ -64,6 +64,16 @@ export function noActivityFile(): RouvyError {
   );
 }
 
+/** The ownership check failed (spec-m3 §6.3): never says whether the Workout exists. */
+export function workoutNotFound(): RouvyError {
+  return new RouvyError("No Workout with this id in your library. Use an id returned by list_workouts.");
+}
+
+/** A Workout with watts, W/kg or other targets (from an imported file), which M3 doesn't map. */
+export function unsupportedWorkout(): RouvyError {
+  return new RouvyError("This Workout has targets other than % FTP: rouvy-mcp reads only % FTP Workouts for now.");
+}
+
 export function apiChanged(route: string, field: string): RouvyError {
   return new RouvyError(
     `Rouvy changed its API: ${route} no longer has ${field}. ` +
