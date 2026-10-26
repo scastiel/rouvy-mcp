@@ -11,6 +11,10 @@ import {
   listPage,
   REFRESH,
   ROUTE_ACTIVITY,
+  FIXTURE_WORKOUT,
+  WORKOUT_LIST,
+  workoutDetail,
+  workoutFixtures,
 } from "../server-harness.js";
 import {
   CONSENTED,
@@ -449,6 +453,30 @@ describe("an allow-listed rider", () => {
 
     expect(names).toContain("list_activities");
     expect(names).not.toContain("export_activity_file");
+  });
+
+  it("lists and reads their own Workouts", async () => {
+    const fixtures = await workoutFixtures("uid-1");
+    const worker = hostedWorker({
+      allowList: RIDER,
+      routes: {
+        [SIGN_IN]: signedIn("uid-1", RIDER),
+        [WORKOUT_LIST]: fixtures.listResponse,
+        [workoutDetail(FIXTURE_WORKOUT)]: fixtures.detailResponse,
+      },
+    });
+    const token = await connectRider(worker, RIDER);
+
+    const list = await mcpRequest(worker, token, "tools/call", { name: "list_workouts", arguments: {} });
+    const read = await mcpRequest(worker, token, "tools/call", {
+      name: "get_workout",
+      arguments: { workout_id: FIXTURE_WORKOUT },
+    });
+
+    expect(JSON.stringify(await list.json())).toContain("Fixture Workout 1");
+    const body = (await read.json()) as { result: { isError?: boolean; content: { text: string }[] } };
+    expect(body.result.isError).toBeFalsy();
+    expect(JSON.parse(body.result.content[0]!.text)).toMatchObject({ id: FIXTURE_WORKOUT, rider_ftp_w: 250 });
   });
 });
 

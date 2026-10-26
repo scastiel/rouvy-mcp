@@ -9,6 +9,7 @@ import { createRequestQueue } from "../../src/rouvy/request-queue.js";
 import { createSessionManager } from "../../src/rouvy/session-manager.js";
 import { windowStats } from "../../src/stats/window.js";
 import { loadActivityFile } from "../../src/tools/activity-file-analysis.js";
+import { toWorkoutResult } from "../../src/tools/workout-shape.js";
 
 /**
  * The maintainer's pre-release check, with their own `npx -y rouvy-mcp login`: the real Rouvy still
@@ -48,6 +49,17 @@ describe("contract with the live Rouvy", () => {
     // Never the Activity id (spec §2): only the two numbers.
     console.log(`Whole-ride NP: ours ${ours} W, Rouvy's ${theirs} W`);
     expect(Math.abs(ours - theirs) / theirs).toBeLessThan(0.02);
+  });
+
+  it("list_workouts and get_workout read the rider's own Workouts", async () => {
+    const { workouts } = await rouvy.listWorkouts();
+    expect(workouts.length, "the account needs at least one Workout of its own").toBeGreaterThan(0);
+
+    // Through the ownership check, and mapped as get_workout returns it: a non-% FTP Workout fails here too.
+    const result = toWorkoutResult(await rouvy.getOwnedWorkout(workouts[0]!.id));
+
+    expect(result.steps.length).toBe(workouts[0]!.segments.length);
+    expect(result.rider_ftp_w).toBeGreaterThan(0);
   });
 });
 

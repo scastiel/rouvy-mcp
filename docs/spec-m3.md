@@ -62,9 +62,13 @@ All routes are on `riders.rouvy.com`, called with the same `rouvy_session` cooki
 
 `intervalType` is `CONSTANT`, `RAMP` or `FREE_RIDE` on both sides. `primaryType` is always `FTP` in M3. A free ride is written with `primaryStart = primaryEnd = 0`. `difficulty`, `tss`, `if`, `rtl` and `coinsForCompletion` are computed by Rouvy.
 
-**Ownership signals:** `workout.createdBy.firebaseUid` compared with the sibling `uid`. Rouvy's `canEdit` is **not** an ownership signal: it is `true` on catalogue Workouts too.
+**Ownership signals:** `workout.createdBy.firebaseUid` compared with the Session's uid (Rouvy echoes it as the sibling `uid`). Rouvy's `canEdit` is **not** an ownership signal: it is `true` on catalogue Workouts too.
 
 **Build-time discoveries** (record them here when found): the response to a form post that fails Rouvy's validation (assumed to be a 200 re-rendering the form), the default route's key in `/workouts/create.data`, and whether `created` paginates.
+
+- **`_routes`** (build step 1): both reads honour `_routes=<route key>`, as M1's list does, and then carry only that route's data (about 2.5 KB instead of 17 KB, and no `root` with the rider's profile). The client always sends it.
+- **The list overview has no `if` and no `access`** (build step 1): only a detail carries them, so `list_workouts` rows leave both out (§4) rather than read every Workout.
+- **Pagination of `created`** (build step 1): not established. The maintainer's library holds a single Workout, and `created.data` takes no offset that the web app sends. The collection carries `itemsCount`: when it ever exceeds the number of Workouts returned, `list_workouts` says so in a note instead of hiding the rest.
 
 Sources: [Rouvy's workout API: routes, format, ownership, edit and delete](https://github.com/scastiel/rouvy-mcp/issues/74) ([findings](https://github.com/scastiel/rouvy-mcp/blob/research/rouvy-workout-api/docs/research/rouvy-workout-api.md)), [Capture the workout builder's requests in Rouvy's web app](https://github.com/scastiel/rouvy-mcp/issues/75) ([capture](https://github.com/scastiel/rouvy-mcp/blob/research/workout-capture/docs/research/rouvy-workout-capture.md)).
 
@@ -74,7 +78,7 @@ Five tools, following spec-m1 §5's conventions: snake_case names, JSON text res
 
 | Tool | Input | Output | Annotations |
 |---|---|---|---|
-| `list_workouts` | `limit?` (1–50, default 10), `offset?` (≥ 0, default 0) | newest first, compact rows `{id, name, duration_sec, tss, if, difficulty, tags, visibility, step_count}`, plus `has_more`. **No Steps.** | `readOnlyHint` |
+| `list_workouts` | `limit?` (1–50, default 10), `offset?` (≥ 0, default 0) | newest first, compact rows `{id, name, duration_sec, tss, difficulty, tags, step_count}`, plus `has_more` (and a note if Rouvy counts more Workouts than it lists). **No Steps.** No `if` or `visibility`: Rouvy's list doesn't carry them (§3). | `readOnlyHint` |
 | `get_workout` | `workout_id` | `{id, name, description, tags, visibility, duration_sec, tss, if, difficulty, route {id, name}, rider_ftp_w, steps, cues}` | `readOnlyHint` |
 | `create_workout` | `name`, `description?`, `tags?`, `visibility?`, `route_id?`, `steps`, `cues?` | the saved Workout, read back (the `get_workout` shape) | not read-only, not destructive |
 | `update_workout` | `workout_id`, plus optional `name`, `description`, `tags`, `visibility`, `steps`, `cues` | the saved Workout, read back | `destructiveHint` |
@@ -200,6 +204,7 @@ M1's error kinds (spec-m1 §8) still apply. New kinds:
 | *Rouvy rejected the write* | a 200 or an unexpected redirect on a form post | Rouvy's message when decodable, else "Rouvy didn't accept the Workout" |
 | *Outcome unknown* | a 5xx, network error or timeout on a POST | "Rouvy may or may not have saved this. Call `list_workouts` before trying again." |
 | *Delete not confirmed* | the Workout is still in `created` after the 202 | "Rouvy answered but the Workout is still in your library" |
+| *Unsupported Workout* | an owned Workout with a segment `type` other than `FTP` (watts or W/kg, from an imported file) | "This Workout has targets other than % FTP" |
 
 Sources: [Write safety in the Rouvy client](https://github.com/scastiel/rouvy-mcp/issues/78).
 

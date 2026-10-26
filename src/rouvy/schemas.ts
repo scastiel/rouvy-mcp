@@ -36,7 +36,8 @@ export function parseActivityListPage(payload: unknown): ActivityListRow[] {
   return result.data[LIST_ROUTE].data.activities;
 }
 
-function describePath(path: PropertyKey[]): string {
+/** `a.b[2].c`, the way drift messages name a field. */
+export function describePath(path: PropertyKey[]): string {
   return path.reduce<string>(
     (out, key) => (typeof key === "number" ? `${out}[${key}]` : out ? `${out}.${String(key)}` : String(key)),
     "",

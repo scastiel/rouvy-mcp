@@ -61,6 +61,8 @@ Without it, the tool doesn't exist and rouvy-mcp writes nothing to disk besides 
 | `get_window_stats` | Stats for one stretch (e.g. a climb from 20:00 to 35:00): best efforts, first half vs second half, HR:power decoupling. |
 | `get_activity_streams` | Downsampled per-second data (power, heart rate, cadence, speed, altitude, distance), at most 500 points per field. |
 | `export_activity_file` | Only with `ROUVY_MCP_EXPORT_DIR`: writes the Activity's FIT file or a CSV and returns its path. |
+| `list_workouts` | Your own Workouts (the plans in your Rouvy library), newest first: id, name, duration, TSS, difficulty, tags, number of Steps. |
+| `get_workout` | One of your Workouts: its Steps in % FTP (with cadence ranges), Cues, tags, visibility, route, and your current FTP. |
 
 Try asking: *"How did my last ride go? Compare the first and second half of the climb."*
 

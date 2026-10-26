@@ -2,7 +2,14 @@ import { parseActivityFile, type ActivityFile } from "../activity-file/parse.js"
 import { createActivityFileCache } from "./activity-file-cache.js";
 import type { Clock } from "./clock.js";
 import { createDetailCache } from "./detail-cache.js";
-import { activityNotFound, apiChanged, noActivityFile, notLoggedIn, rouvyUnavailable } from "./errors.js";
+import {
+  activityNotFound,
+  apiChanged,
+  noActivityFile,
+  notLoggedIn,
+  rouvyUnavailable,
+  workoutNotFound,
+} from "./errors.js";
 import { createListCache } from "./list-cache.js";
 import type { SessionManager } from "./session-manager.js";
 import {
@@ -14,6 +21,15 @@ import {
   type ActivityListRow,
 } from "./schemas.js";
 import { asRedirect, decodeSingleFetch } from "./turbo-stream.js";
+import { createWorkoutListCache } from "./workout-list-cache.js";
+import {
+  parseWorkoutDetail,
+  parseWorkoutList,
+  WORKOUT_DETAIL_ROUTE,
+  WORKOUT_LIST_ROUTE,
+  type WorkoutDetail,
+  type WorkoutList,
+} from "./workout-schemas.js";
 
 const RIDERS = "https://riders.rouvy.com";
 
@@ -25,6 +41,10 @@ export interface RouvyClient {
   listActivitiesPage(offset: number): Promise<ActivityListRow[]>;
   getActivity(activityId: string): Promise<ActivityDetail>;
   getActivityFile(activityId: string): Promise<DownloadedActivityFile>;
+  /** The rider's `created` collection, newest first. Cached for 60 s. */
+  listWorkouts(): Promise<WorkoutList>;
+  /** One Workout, read fresh, only if it's the rider's own (spec-m3 §6.3); otherwise *Workout not found*. */
+  getOwnedWorkout(workoutId: string): Promise<WorkoutDetail>;
 }
 
 /** A parsed Activity file, with its bytes as downloaded so an export never costs a second request. */
@@ -36,6 +56,7 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
   const listCache = createListCache(clock);
   const detailCache = createDetailCache(clock);
   const activityFileCache = createActivityFileCache();
+  const workoutListCache = createWorkoutListCache(clock);
 
   async function getData(
     route: string,
@@ -96,8 +117,34 @@ export function createRouvyClient(fetch: typeof globalThis.fetch, sessions: Sess
     return detail;
   }
 
+  async function listWorkouts(): Promise<WorkoutList> {
+    const uid = await sessions.uid();
+    const cached = workoutListCache.get(uid);
+    if (cached) return cached;
+    const payload = await getData(WORKOUT_LIST_ROUTE, "/workouts/collections/created.data", {
+      params: () => ({ _routes: WORKOUT_LIST_ROUTE }),
+    });
+    const list = parseWorkoutList(payload);
+    workoutListCache.set(uid, list);
+    return list;
+  }
+
   return {
     getActivity,
+    listWorkouts,
+    async getOwnedWorkout(workoutId) {
+      // Listed in `created` (so neither deleted nor someone else's)…
+      const { workouts } = await listWorkouts();
+      if (!workouts.some((w) => w.id === workoutId)) throw workoutNotFound();
+      const payload = await getData(WORKOUT_DETAIL_ROUTE, `/workouts/${encodeURIComponent(workoutId)}.data`, {
+        params: () => ({ _routes: WORKOUT_DETAIL_ROUTE }),
+        onNotFound: workoutNotFound,
+      });
+      const workout = parseWorkoutDetail(payload);
+      // …and created by this rider. Rouvy's own `canEdit` is true on catalogue Workouts too.
+      if (workout.createdBy.firebaseUid !== (await sessions.uid())) throw workoutNotFound();
+      return workout;
+    },
     async getActivityFile(activityId) {
       const uid = await sessions.uid();
       const cached = activityFileCache.get(uid, activityId);
