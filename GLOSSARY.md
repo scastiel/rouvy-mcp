@@ -14,6 +14,14 @@ _Avoid_: Session, ride, workout (a Workout is the plan, not the ride)
 A structured plan of steps (durations and targets such as a share of FTP) saved in the rider's own Rouvy library, ridden later as an Activity.
 _Avoid_: Training, plan, session, interval file
 
+**Step**:
+One stretch of a Workout with a single target: steady, a ramp from one target to another, or a free ride.
+_Avoid_: Segment, interval, block
+
+**Cue**:
+A line of text shown to the rider at a set time during a Workout.
+_Avoid_: Instruction, comment, text event
+
 **Activity file**:
 Rouvy's raw per-second recording of one Activity, the file behind Rouvy's "Export" button.
 _Avoid_: Export, ride file

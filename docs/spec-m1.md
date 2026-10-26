@@ -38,6 +38,7 @@ These apply to every part of the build.
 - **Secrets.** Never log or echo passwords, tokens, Activity ids, export URLs or Rouvy response bodies. A failed login response can echo the password back.
 - **Repo hygiene.** No Rouvy code or content in the repo (no copied JS bundles, no media). Fixtures are committed only when redacted (§9).
 - **Read-only by construction.** The Rouvy client has no method that writes to Rouvy. The only POSTs are the two login/refresh calls in §4.
+  _Changed in M3: "writes Workouts only", see [spec-m3 §2](spec-m3.md#2-ground-rules)._
 
 Sources: [Map Notes](https://github.com/scastiel/rouvymcp/issues/1), [Programmatic login path past Rouvy's Cloudflare](https://github.com/scastiel/rouvymcp/issues/9), [Resilience to Rouvy API drift](https://github.com/scastiel/rouvymcp/issues/11).
 
