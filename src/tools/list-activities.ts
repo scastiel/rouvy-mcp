@@ -1,5 +1,6 @@
 import { LIST_PAGE_SIZE, type RouvyClient } from "../rouvy/client.js";
 import type { ActivityListRow } from "../rouvy/schemas.js";
+import { activityUrl } from "./common.js";
 
 export interface ListActivitiesInput {
   limit: number;
@@ -33,6 +34,7 @@ const OPTIONAL_FIELDS = ["title", "type", "moving_time_sec", "distance_m", "elev
 function toCompactRow(row: ActivityListRow) {
   const compact = {
     id: row.id,
+    url: activityUrl(row.id),
     title: row.title,
     type: row.training,
     start: row.startUTC,
@@ -43,7 +45,7 @@ function toCompactRow(row: ActivityListRow) {
     if: row.total?.if,
   };
   return Object.fromEntries(Object.entries(compact).filter(([, value]) => value != null)) as Partial<typeof compact> &
-    Pick<typeof compact, "id" | "start">;
+    Pick<typeof compact, "id" | "url" | "start">;
 }
 
 function missingFieldNotes(rows: ReturnType<typeof toCompactRow>[]): string[] {

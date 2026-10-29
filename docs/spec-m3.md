@@ -88,8 +88,8 @@ Five tools, following spec-m1 §5's conventions: snake_case names, JSON text res
 
 | Tool | Input | Output | Annotations |
 |---|---|---|---|
-| `list_workouts` | `limit?` (1–50, default 10), `offset?` (≥ 0, default 0) | newest first, compact rows `{id, name, duration_sec, tss, difficulty, tags, step_count}`, plus `has_more` (and a note if Rouvy counts more Workouts than it lists). **No Steps.** No `if` or `visibility`: Rouvy's list doesn't carry them (§3). | `readOnlyHint` |
-| `get_workout` | `workout_id` | `{id, name, description, tags, visibility, duration_sec, tss, if, difficulty, route {id, name}, rider_ftp_w, steps, cues}` | `readOnlyHint` |
+| `list_workouts` | `limit?` (1–50, default 10), `offset?` (≥ 0, default 0) | newest first, compact rows `{id, url, name, duration_sec, tss, difficulty, tags, step_count}`, plus `has_more` (and a note if Rouvy counts more Workouts than it lists). **No Steps.** No `if` or `visibility`: Rouvy's list doesn't carry them (§3). | `readOnlyHint` |
+| `get_workout` | `workout_id` | `{id, url, name, description, tags, visibility, duration_sec, tss, if, difficulty, route {id, name}, rider_ftp_w, steps, cues}`; `url` is the Workout's page in Rouvy's web app (`https://riders.rouvy.com/workouts/<id>`) | `readOnlyHint` |
 | `create_workout` | `name`, `description?`, `tags?`, `visibility?`, `route_id?`, `steps`, `cues?` | the saved Workout, read back (the `get_workout` shape) | not read-only, not destructive |
 | `update_workout` | `workout_id`, plus optional `name`, `description`, `tags`, `visibility`, `steps`, `cues` | the saved Workout, read back | `destructiveHint` |
 | `delete_workout` | `workout_id` | `{deleted: id, name}` and a note that Rouvy may keep the Workout readable by its id | `destructiveHint` |

@@ -1,3 +1,4 @@
+import { RIDERS } from "../constants.js";
 import type { Aggregates, MinMaxAvg } from "../rouvy/schemas.js";
 
 /** Rouvy's `PP` durations, in order: the power peaks it reports, and the best efforts we look for. */
@@ -28,6 +29,16 @@ export function dataChannels(aggrs: Aggregates): DataChannels {
 
 function hasData(stats: MinMaxAvg): boolean {
   return (stats?.max ?? 0) > 0;
+}
+
+/** Where the rider opens an Activity in Rouvy's web app. */
+export function activityUrl(activityId: string): string {
+  return `${RIDERS}/activity/${encodeURIComponent(activityId)}`;
+}
+
+/** Where the rider opens one of their Workouts in Rouvy's web app. */
+export function workoutUrl(workoutId: string): string {
+  return `${RIDERS}/workouts/${encodeURIComponent(workoutId)}`;
 }
 
 /** Floats carry noise (1802.7200000000003): two decimals are plenty. */

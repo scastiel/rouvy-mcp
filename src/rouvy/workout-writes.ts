@@ -1,4 +1,5 @@
 import { decode } from "turbo-stream";
+import { RIDERS } from "../constants.js";
 import type { WriteInstruction, WriteSegment } from "../workouts/steps.js";
 import type { RouvyClient } from "./client.js";
 import {
@@ -12,7 +13,6 @@ import {
 import type { SessionManager } from "./session-manager.js";
 import type { WorkoutDetail } from "./workout-schemas.js";
 
-const RIDERS = "https://riders.rouvy.com";
 
 /** Everything Rouvy's Workout form takes but the route, already in Rouvy's terms. */
 export interface WorkoutForm {

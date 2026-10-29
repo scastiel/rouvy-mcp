@@ -40,6 +40,7 @@ describe("list_activities", () => {
       activities: [
         {
           id: "260515171421-fixture0",
+          url: "https://riders.rouvy.com/activity/260515171421-fixture0",
           title: "Fixture route 1",
           type: "ROUTE",
           start: "2026-05-15T17:14:21.130Z",
@@ -51,6 +52,7 @@ describe("list_activities", () => {
         },
         {
           id: "260514155221-fixture1",
+          url: "https://riders.rouvy.com/activity/260514155221-fixture1",
           title: "Fixture route 2",
           type: "WORKOUT_FTP_TEST",
           start: "2026-05-14T15:52:21.513Z",
