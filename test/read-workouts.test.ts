@@ -54,6 +54,7 @@ describe("list_workouts", () => {
       workouts: [
         {
           id: FIXTURE_WORKOUT,
+          url: `https://riders.rouvy.com/workouts/${FIXTURE_WORKOUT}`,
           name: "Fixture Workout 1",
           duration_sec: 5400,
           tss: 64,
@@ -133,6 +134,7 @@ describe("get_workout", () => {
     expect(result.isError).toBeFalsy();
     expect(JSON.parse(text(result))).toEqual({
       id: FIXTURE_WORKOUT,
+      url: `https://riders.rouvy.com/workouts/${FIXTURE_WORKOUT}`,
       name: "Fixture Workout 1",
       description: "Fixture description",
       tags: [],

@@ -30,6 +30,15 @@ function hasData(stats: MinMaxAvg): boolean {
   return (stats?.max ?? 0) > 0;
 }
 
+/** Where the rider opens an Activity or a Workout in Rouvy's web app. */
+export function activityUrl(activityId: string): string {
+  return `https://riders.rouvy.com/activity/${encodeURIComponent(activityId)}`;
+}
+
+export function workoutUrl(workoutId: string): string {
+  return `https://riders.rouvy.com/workouts/${encodeURIComponent(workoutId)}`;
+}
+
 /** Floats carry noise (1802.7200000000003): two decimals are plenty. */
 export function tidy(value: number | null | undefined): number | undefined {
   return value == null ? undefined : Math.round(value * 100) / 100;

@@ -1,6 +1,6 @@
 import { unsupportedWorkout } from "../rouvy/errors.js";
 import type { WorkoutDetail, WorkoutSegment } from "../rouvy/workout-schemas.js";
-import { dropEmpty } from "./common.js";
+import { dropEmpty, workoutUrl } from "./common.js";
 
 /**
  * A Workout as every Workout tool returns it (spec-m3 §4): flat Steps and absolute Cues, the same
@@ -9,6 +9,7 @@ import { dropEmpty } from "./common.js";
 export function toWorkoutResult(workout: WorkoutDetail) {
   return dropEmpty({
     id: workout.id,
+    url: workoutUrl(workout.id),
     name: workout.name,
     description: workout.description,
     tags: workout.trainingEffects,

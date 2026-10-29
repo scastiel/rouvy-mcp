@@ -1,6 +1,6 @@
 import type { RouvyClient } from "../rouvy/client.js";
 import type { ActivityDetail, Aggregates, MinMaxAvg } from "../rouvy/schemas.js";
-import { dataChannels, dropEmpty, POWER_PEAKS, tidy, type DataChannels } from "./common.js";
+import { activityUrl, dataChannels, dropEmpty, POWER_PEAKS, tidy, type DataChannels } from "./common.js";
 
 export interface GetActivityInput {
   activity_id: string;
@@ -37,6 +37,7 @@ export async function getActivity(rouvy: RouvyClient, { activity_id }: GetActivi
 
   const summary: Record<string, unknown> = {
     id: activity.id,
+    url: activityUrl(activity.id),
     title: activity.title,
     type: activity.training,
     start: activity.startUTC,

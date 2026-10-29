@@ -55,14 +55,14 @@ Without it, the tool doesn't exist and rouvy-mcp writes nothing to disk besides 
 
 | Tool | What it gives |
 |---|---|
-| `list_activities` | Your Activities, newest first: id, title, type, start, moving time, distance, elevation, TSS, IF. |
-| `get_activity` | One Activity's summary with Rouvy's own numbers (NP, IF, TSS, power peaks, HR, zones, laps…) and its Activity snapshot (the Rider settings Rouvy stored with it). |
+| `list_activities` | Your Activities, newest first: id, link in the Rouvy web app, title, type, start, moving time, distance, elevation, TSS, IF. |
+| `get_activity` | One Activity's summary and its link in the Rouvy web app, with Rouvy's own numbers (NP, IF, TSS, power peaks, HR, zones, laps…) and its Activity snapshot (the Rider settings Rouvy stored with it). |
 | `get_activity_intervals` | Fixed-size splits (every 5 min by default) from the per-second Activity file. |
 | `get_window_stats` | Stats for one stretch (e.g. a climb from 20:00 to 35:00): best efforts, first half vs second half, HR:power decoupling. |
 | `get_activity_streams` | Downsampled per-second data (power, heart rate, cadence, speed, altitude, distance), at most 500 points per field. |
 | `export_activity_file` | Only with `ROUVY_MCP_EXPORT_DIR`: writes the Activity's FIT file or a CSV and returns its path. |
-| `list_workouts` | Your own Workouts (the plans in your Rouvy library), newest first: id, name, duration, TSS, difficulty, tags, number of Steps. |
-| `get_workout` | One of your Workouts: its Steps in % FTP (with cadence ranges), Cues, tags, visibility, route, and your current FTP. |
+| `list_workouts` | Your own Workouts (the plans in your Rouvy library), newest first: id, link in the Rouvy web app, name, duration, TSS, difficulty, tags, number of Steps. |
+| `get_workout` | One of your Workouts: its link in the Rouvy web app, its Steps in % FTP (with cadence ranges), Cues, tags, visibility, route, and your current FTP. |
 | `create_workout` | Creates a Workout in your library from steady, ramp, free-ride and repeated Steps, with Cues and tags. Private unless you ask. |
 | `update_workout` | Changes one of your Workouts: only the fields given; new Steps replace them all. A Workout synced from another app may be overwritten by that app's next sync. |
 | `delete_workout` | Deletes one of your Workouts and checks it's gone from your library. Rouvy may keep it readable by its id. |

@@ -130,7 +130,7 @@ export function createServer(options: ServerOptions): McpServer {
     {
       description:
         "List the rider's Rouvy Activities, newest first, as compact rows (id, title, type, start, moving time, " +
-        "distance, elevation, TSS, IF). Use the ids with the other tools.",
+        "distance, elevation, TSS, IF) with each one's link in the Rouvy web app. Use the ids with the other tools.",
       inputSchema: z.object({
         limit: z.number().int().min(1).max(50).default(10).describe("How many Activities to return (1–50)."),
         offset: z.number().int().min(0).default(0).describe("How many of the newest Activities to skip."),
@@ -143,7 +143,7 @@ export function createServer(options: ServerOptions): McpServer {
     "get_activity",
     {
       description:
-        "One Activity's summary, with Rouvy's own numbers (they match the Rouvy app): times, distance, elevation, " +
+        "One Activity's summary and its link in the Rouvy web app, with Rouvy's own numbers (they match the Rouvy app): times, distance, elevation, " +
         "kcal, NP, IF, TSS, power peaks, min/max/avg power, heart rate, cadence and speed, %FTP, time in power and " +
         "HR zones, laps and route segment results. Also the Rider settings used (FTP, weight, max HR, zones) from " +
         "the Activity snapshot, which data exist, and a note for each value left out.",
@@ -222,7 +222,7 @@ export function createServer(options: ServerOptions): McpServer {
     {
       description:
         "List the rider's own Workouts in their Rouvy library (the plans, not the rides), newest first, as " +
-        "compact rows (id, name, duration, TSS, difficulty, tags, number of Steps). Use get_workout for the Steps.",
+        "compact rows (id, link in the Rouvy web app, name, duration, TSS, difficulty, tags, number of Steps). Use get_workout for the Steps.",
       inputSchema: z.object({
         limit: z.number().int().min(1).max(50).default(10).describe("How many Workouts to return (1–50)."),
         offset: z.number().int().min(0).default(0).describe("How many of the newest Workouts to skip."),
@@ -236,7 +236,7 @@ export function createServer(options: ServerOptions): McpServer {
     "get_workout",
     {
       description:
-        "One of the rider's own Workouts: name, description, tags, visibility, duration, TSS, IF, difficulty, " +
+        "One of the rider's own Workouts: its link in the Rouvy web app, name, description, tags, visibility, duration, TSS, IF, difficulty, " +
         "route, its Steps (steady, ramp or free ride, in % FTP, with an optional cadence range) and Cues (text " +
         "at a time from the start). Also rider_ftp_w, the rider's current FTP in watts, to turn watts into % FTP.",
       inputSchema: z.object({

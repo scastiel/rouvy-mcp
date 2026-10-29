@@ -1,5 +1,5 @@
 import type { RouvyClient } from "../rouvy/client.js";
-import { dropEmpty } from "./common.js";
+import { dropEmpty, workoutUrl } from "./common.js";
 
 export interface ListWorkoutsInput {
   limit: number;
@@ -12,6 +12,7 @@ export async function listWorkouts(rouvy: RouvyClient, { limit, offset }: ListWo
   const rows = workouts.slice(offset, offset + limit).map((workout) =>
     dropEmpty({
       id: workout.id,
+      url: workoutUrl(workout.id),
       name: workout.name,
       duration_sec: workout.duration,
       tss: workout.tss,

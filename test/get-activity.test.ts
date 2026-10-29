@@ -39,6 +39,7 @@ describe("get_activity", () => {
     expect(result.isError).toBeFalsy();
     expect(JSON.parse(text(result))).toEqual({
       id: ROUTE_ACTIVITY,
+      url: `https://riders.rouvy.com/activity/${ROUTE_ACTIVITY}`,
       title: "Fixture Activity 0",
       type: "ROUTE",
       start: "2026-05-03T19:54:35.130Z",
