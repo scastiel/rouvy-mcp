@@ -1,4 +1,5 @@
 import { parseActivityFile, type ActivityFile } from "../activity-file/parse.js";
+import { RIDERS } from "../constants.js";
 import { createActivityFileCache } from "./activity-file-cache.js";
 import type { Clock } from "./clock.js";
 import { createDetailCache } from "./detail-cache.js";
@@ -33,7 +34,6 @@ import {
   type WorkoutList,
 } from "./workout-schemas.js";
 
-const RIDERS = "https://riders.rouvy.com";
 
 /** Rouvy's Activity list comes in pages of this many rows. */
 export const LIST_PAGE_SIZE = 10;

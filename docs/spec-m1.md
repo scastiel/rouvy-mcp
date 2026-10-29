@@ -119,7 +119,7 @@ Shared conventions:
 ### 5.1 `list_activities`
 
 - **Input:** `limit` (int, 1–50, default 10; `> 50` is an input error), `offset` (int ≥ 0, default 0).
-- **Output:** newest first, compact rows: `id`, `title`, `type` (Rouvy's `training`, e.g. `ROUTE`, `WORKOUT_FTP_TEST`), `start` (`startUTC`, ISO 8601), `moving_time_sec`, `distance_m`, `elevation_m`, `tss`, `if`. Plus whether more rows may exist.
+- **Output:** newest first, compact rows: `id`, `url` (the Activity's page in Rouvy's web app, `https://riders.rouvy.com/activity/<id>`), `title`, `type` (Rouvy's `training`, e.g. `ROUTE`, `WORKOUT_FTP_TEST`), `start` (`startUTC`, ISO 8601), `moving_time_sec`, `distance_m`, `elevation_m`, `tss`, `if`. Plus whether more rows may exist.
 - **Source:** `activities-pagination.data` pages (§6). TSS and IF come from Rouvy's list row.
 - Fetches the pages covering `[offset, offset+limit)`: at most **6** upstream pages per call. Stops at the first empty page.
 
@@ -127,7 +127,7 @@ Shared conventions:
 
 - **Input:** `activity_id`.
 - **Output:** the summary, **Rouvy's numbers as Rouvy gives them** (so they match the Rouvy app):
-  - title, type, start, elapsed / moving time, distance, elevation, kcal,
+  - `url` (as in `list_activities`), title, type, start, elapsed / moving time, distance, elevation, kcal,
   - `NP`, `IF`, `TSS`, the 7 power peaks (`PP`: 5 s, 30 s, 1 min, 5 min, 20 min, 30 min, 60 min), min/max/avg power, HR, cadence, speed (`aggrs`), %FTP,
   - time in power and HR zones (`hists`), laps, route segment results (`segmentsPasses`),
   - **the Rider settings used**: FTP, weight, max HR, power and HR zones from the Activity snapshot,

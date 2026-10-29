@@ -129,8 +129,8 @@ export function createServer(options: ServerOptions): McpServer {
     "list_activities",
     {
       description:
-        "List the rider's Rouvy Activities, newest first, as compact rows (id, title, type, start, moving time, " +
-        "distance, elevation, TSS, IF) with each one's link in the Rouvy web app. Use the ids with the other tools.",
+        "List the rider's Rouvy Activities, newest first, as compact rows (id, link in the Rouvy web app, title, " +
+        "type, start, moving time, distance, elevation, TSS, IF). Use the ids with the other tools.",
       inputSchema: z.object({
         limit: z.number().int().min(1).max(50).default(10).describe("How many Activities to return (1–50)."),
         offset: z.number().int().min(0).default(0).describe("How many of the newest Activities to skip."),

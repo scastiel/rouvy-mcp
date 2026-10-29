@@ -11,4 +11,7 @@ export const USER_AGENT = `rouvy-mcp/${VERSION} (+https://github.com/scastiel/ro
  */
 export const ROUVY_FIREBASE_WEB_KEY = "AIzaSyDx27rsmUbN9aZdqCPM7rBcuRPb2XVnQxM";
 
+/** Rouvy's web app: the pages riders open, and the `.data` routes behind them that we read and write. */
+export const RIDERS = "https://riders.rouvy.com";
+
 export const LOGIN_COMMAND = "npx -y rouvy-mcp login";
